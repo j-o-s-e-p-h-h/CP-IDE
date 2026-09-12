@@ -1,0 +1,16 @@
+# build output
+build/
+installer/out/
+*.exe
+
+# local data created when running from the source tree
+cp/
+
+# design hand-off (prototype, screenshots) is not part of the shipped app
+design_handoff_cp_ide/
+
+# editors
+.vs/
+.idea/
+.vscode/
+*.user

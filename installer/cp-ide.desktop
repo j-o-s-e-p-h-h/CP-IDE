@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=CP IDE
+Comment=Competitive programming IDE
+Exec=cp-ide
+Icon=cp-ide
+Terminal=false
+Categories=Development;IDE;
