@@ -624,16 +624,36 @@ function layoutMenuHtml() {
 }
 
 const stmtCache = {};
+// Second line of defence for fetched statement HTML (the core strips scripts too):
+// drop code-bearing elements, event handlers and javascript:/data: URLs before innerHTML.
+function sanitizeHtml(html) {
+  const tpl = document.createElement('template');
+  tpl.innerHTML = html;
+  const bad = new Set(['SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'EMBED', 'SVG', 'MATH', 'TEMPLATE', 'NOSCRIPT', 'FORM', 'LINK', 'META', 'BASE', 'FRAME', 'FRAMESET', 'APPLET', 'INPUT', 'BUTTON', 'TEXTAREA', 'SELECT']);
+  const walk = (node) => {
+    for (const el of Array.from(node.children)) {
+      if (bad.has(el.tagName)) { el.remove(); continue; }
+      for (const a of Array.from(el.attributes)) {
+        const n = a.name.toLowerCase(), v = a.value.trim().toLowerCase();
+        if (n.startsWith('on') || n === 'style' || n === 'srcdoc' || ((n === 'href' || n === 'src' || n === 'xlink:href' || n === 'formaction') && /^(javascript|data|vbscript):/.test(v))) el.removeAttribute(a.name);
+      }
+      walk(el);
+    }
+  };
+  walk(tpl.content);
+  return tpl.innerHTML;
+}
+
 function statementHtml(p, focusStyle) {
   if (p.empty) return `<p style="margin:0 0 12px;text-wrap:pretty">This session is empty. Click a problem or contest in your browser with Competitive Companion, or add one from a URL via the <b>+</b> button.</p>`;
   const samples = (p.tests || []).filter((t) => !t.custom);
   let body = '';
   if (p.statementHtml && p.statementExact) {
     // The judge's own problem block: title, limits, samples and note come with it.
-    return `<div class="stmt cf" data-stmt="${esc(p.id)}">${stmtCache[p.id] || p.statementHtml}</div>`;
+    return `<div class="stmt cf" data-stmt="${esc(p.id)}">${stmtCache[p.id] || sanitizeHtml(p.statementHtml)}</div>`;
   }
   if (p.statementHtml) {
-    body = `<div class="stmt" data-stmt="${esc(p.id)}">${stmtCache[p.id] || p.statementHtml}</div>`;
+    body = `<div class="stmt" data-stmt="${esc(p.id)}">${stmtCache[p.id] || sanitizeHtml(p.statementHtml)}</div>`;
   } else {
     const err = S.stmtErrors[p.id];
     body = `<p style="margin:0 0 12px">${err ? `Statement could not be fetched (${esc(err)}).` : 'Fetching the statement…'} ${p.url ? `<a href="#" data-act="openUrl" data-arg="${esc(p.url)}">Open on ${esc(p.judge)}</a> · <a href="#" data-act="refetch">Retry</a>` : ''}</p>

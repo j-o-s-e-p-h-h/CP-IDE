@@ -37,4 +37,5 @@ class HttpServer {
   std::string error_;
   void loop();
   void handle(uintptr_t sock);
+  void handleImpl(uintptr_t sock);
 };

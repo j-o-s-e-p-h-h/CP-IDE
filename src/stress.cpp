@@ -17,7 +17,7 @@ void StressRunner::start(const Toolchain& tc, const fs::path& dir, const std::st
       ev.state = "running";
       ev.message = "compiling";
       cb(ev);
-      auto cr = compileFor(tc, lang, dir);
+      auto cr = compileFor(tc, lang, dir, &cancel_);
       if (!cr.ok) {
         ev.state = "error";
         ev.message = "Compile error:\n" + cr.log;

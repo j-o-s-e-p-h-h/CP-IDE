@@ -1,15 +1,22 @@
 #include "companion.hpp"
+#include <algorithm>
 #include <regex>
 
 namespace companion {
 
 std::string judgeForUrl(const std::string& url) {
-  std::string u = util::lower(url);
-  if (util::contains(u, "codeforces.com") || util::contains(u, "codeforc.es")) return "codeforces";
-  if (util::contains(u, "atcoder.jp")) return "atcoder";
-  if (util::contains(u, "cses.fi")) return "cses";
-  if (util::contains(u, "usaco.org")) return "usaco";
-  if (util::contains(u, "hackerrank.com")) return "hackerrank";
+  // Exact host match (with subdomains), never a substring: "evil.example/?codeforces.com"
+  // must not be treated as Codeforces.
+  std::string h = util::urlHost(url);
+  auto isHost = [&](const char* domain) {
+    std::string d = domain;
+    return h == d || (h.size() > d.size() && util::endsWith(h, "." + d));
+  };
+  if (isHost("codeforces.com") || isHost("codeforc.es")) return "codeforces";
+  if (isHost("atcoder.jp")) return "atcoder";
+  if (isHost("cses.fi")) return "cses";
+  if (isHost("usaco.org")) return "usaco";
+  if (isHost("hackerrank.com")) return "hackerrank";
   return "other";
 }
 
@@ -48,16 +55,23 @@ std::string contestNameFromGroup(const std::string& group) {
   return g;
 }
 
+// The payload comes from an unauthenticated local port, so every field is checked for
+// type before use (nlohmann's value() throws on a type mismatch).
+static std::string str(const json& j, const char* key) {
+  return j.contains(key) && j[key].is_string() ? j[key].get<std::string>() : std::string();
+}
+
 bool parsePayload(const json& j, Problem& out, std::string& batchId, int& batchSize) {
-  if (!j.is_object() || !j.contains("name") || !j.contains("tests")) return false;
+  if (!j.is_object() || !j.contains("name") || !j["name"].is_string() || !j.contains("tests") || !j["tests"].is_array()) return false;
   out = Problem{};
-  std::string name = j.value("name", "");
-  out.url = j.value("url", "");
-  out.group = j.value("group", "");
+  std::string name = str(j, "name");
+  out.url = str(j, "url");
+  if (!out.url.empty() && !util::isSafeHttpUrl(out.url)) out.url.clear();  // never fetch or open odd URLs
+  out.group = str(j, "group");
   out.judge = judgeForUrl(out.url);
-  out.interactive = j.value("interactive", false);
-  if (j.contains("timeLimit") && j["timeLimit"].is_number()) out.timeLimitSec = j["timeLimit"].get<double>() / 1000.0;
-  if (j.contains("memoryLimit") && j["memoryLimit"].is_number()) out.memoryMB = j["memoryLimit"].get<int>();
+  out.interactive = j.contains("interactive") && j["interactive"].is_boolean() && j["interactive"].get<bool>();
+  if (j.contains("timeLimit") && j["timeLimit"].is_number()) out.timeLimitSec = std::max(0.1, std::min(60.0, j["timeLimit"].get<double>() / 1000.0));
+  if (j.contains("memoryLimit") && j["memoryLimit"].is_number()) out.memoryMB = std::max(16, std::min(4096, (int)j["memoryLimit"].get<double>()));
   splitName(name, out.id, out.title);
   if (out.judge == "codeforces") {
     std::string cid, idx;
@@ -67,19 +81,21 @@ bool parsePayload(const json& j, Problem& out, std::string& batchId, int& batchS
       if (out.id.empty()) out.id = idx;
     }
   }
-  if (j.contains("tests") && j["tests"].is_array())
-    for (auto& t : j["tests"]) {
-      TestCase tc;
-      tc.in = t.value("input", "");
-      tc.out = t.value("output", "");
-      out.tests.push_back(tc);
-    }
+  for (auto& t : j["tests"]) {
+    if (!t.is_object()) continue;
+    TestCase tc;
+    tc.in = str(t, "input");
+    tc.out = str(t, "output");
+    out.tests.push_back(tc);
+    if (out.tests.size() >= 50) break;
+  }
   batchId.clear();
   batchSize = 1;
   if (j.contains("batch") && j["batch"].is_object()) {
-    batchId = j["batch"].value("id", "");
-    batchSize = j["batch"].value("size", 1);
+    batchId = str(j["batch"], "id");
+    if (j["batch"].contains("size") && j["batch"]["size"].is_number()) batchSize = (int)j["batch"]["size"].get<double>();
   }
+  if (name.size() > 200) name.resize(200);
   out.created = util::nowSec();
   return true;
 }

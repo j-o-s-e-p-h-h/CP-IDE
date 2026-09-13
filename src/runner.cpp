@@ -40,9 +40,15 @@ void Process::joinReaders() {
   if (tErr_.joinable()) tErr_.join();
 }
 
+// Inheritable pipe ends exist between CreatePipe and the CloseHandle after CreateProcessW;
+// a child started concurrently on another thread would inherit them and keep our reader
+// threads waiting for EOF until it exits. One process start at a time avoids that.
+static std::mutex g_spawnMutex;
+
 bool Process::start(const std::wstring& cmdline, const fs::path& cwd,
                     std::function<void(const std::string&)> onStdout,
                     std::function<void(const std::string&)> onStderr) {
+  std::lock_guard spawnLock(g_spawnMutex);
   Pipe in, out, err;
   if (!in.create(true, false) || !out.create(false, true) || !err.create(false, true)) {
     error_ = "CreatePipe failed";
@@ -336,10 +342,10 @@ std::wstring Toolchain::runCommand(const std::string& lang, const fs::path& dir,
   return quote(python) + L" " + quote(util::pstr(dir / "main.py"));
 }
 
-CompileResult compileJava(const Toolchain& tc, const fs::path& dir) {
+CompileResult compileJava(const Toolchain& tc, const fs::path& dir, std::atomic<bool>* cancel) {
   CompileResult cr;
   std::wstring cmd = tc.quote(tc.javac) + L" -encoding UTF-8 -d . Main.java";
-  auto r = runProcess(cmd, dir, "", 120000);
+  auto r = runProcess(cmd, dir, "", 120000, cancel);
   cr.ms = r.ms;
   if (!r.started) {
     cr.ok = false;
@@ -352,9 +358,9 @@ CompileResult compileJava(const Toolchain& tc, const fs::path& dir) {
   return cr;
 }
 
-CompileResult compileFor(const Toolchain& tc, const std::string& lang, const fs::path& dir) {
-  if (lang == "cpp") return compileCpp(tc, dir);
-  if (lang == "java") return compileJava(tc, dir);
+CompileResult compileFor(const Toolchain& tc, const std::string& lang, const fs::path& dir, std::atomic<bool>* cancel) {
+  if (lang == "cpp") return compileCpp(tc, dir, false, cancel);
+  if (lang == "java") return compileJava(tc, dir, cancel);
   return CompileResult{};
 }
 
@@ -362,11 +368,11 @@ std::wstring Toolchain::pythonCommand(const fs::path& script) const {
   return quote(python) + L" " + quote(util::pstr(script));
 }
 
-CompileResult compileCpp(const Toolchain& tc, const fs::path& dir, bool debug) {
+CompileResult compileCpp(const Toolchain& tc, const fs::path& dir, bool debug, std::atomic<bool>* cancel) {
   CompileResult cr;
   std::wstring cmd = tc.quote(tc.gpp) + L" " + (debug ? L"-g -O0 -std=c++23" : util::widen(tc.cppFlags)) +
                      L" main.cpp -o " + util::widen(util::exeName(debug ? "sol_debug" : "sol"));
-  auto r = runProcess(cmd, dir, "", 120000);
+  auto r = runProcess(cmd, dir, "", 120000, cancel);
   cr.ms = r.ms;
   if (!r.started) {
     cr.ok = false;

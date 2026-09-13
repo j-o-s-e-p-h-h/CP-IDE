@@ -28,9 +28,13 @@ std::string langLabel(const std::string& lang) {
 App::App(fs::path root, fs::path uiDir, fs::path toolsDir)
     : storage_(std::move(root)), uiDir_(std::move(uiDir)), toolsDir_(std::move(toolsDir)) {
   config_ = storage_.config();
-  tools_ = detectToolchain(config_, tc_);
+  try {
+    tools_ = detectToolchain(config_, tc_);
+  } catch (const std::exception&) {  // e.g. a number where config.json expects a string
+    tools_ = detectToolchain(json::object(), tc_);
+  }
   auto st = storage_.loadState();
-  std::string active = st.value("activeContest", "");
+  std::string active = st.contains("activeContest") && st["activeContest"].is_string() ? st["activeContest"].get<std::string>() : "";
   if (!active.empty()) openContestDir(active);
   if (!hasContest_) {
     auto list = storage_.listContests();
@@ -77,7 +81,9 @@ void App::spawn(std::function<void()> fn) {
 
 void App::emit(const json& ev) {
   if (!wv_) return;
-  std::string js = "window.__cp && window.__cp.event(" + ev.dump() + ");";
+  // Program output can contain bytes that are not UTF-8 (Windows code pages, binary junk);
+  // replace them instead of throwing on a worker thread.
+  std::string js = "window.__cp && window.__cp.event(" + ev.dump(-1, ' ', false, json::error_handler_t::replace) + ");";
   auto* w = wv_;
   w->dispatch([w, js] { w->eval(js); });
 }
@@ -281,6 +287,15 @@ void App::fetchStatementAsync(std::string contestDir, std::string problemDir, st
 
 // ------------------------------------------------------------- Companion
 std::string App::onCompanionPost(const HttpRequest& req) {
+  try {
+    return onCompanionPostImpl(req);
+  } catch (const std::exception& e) {
+    return json({{"ok", false}, {"error", e.what()}}).dump();
+  }
+}
+
+std::string App::onCompanionPostImpl(const HttpRequest& req) {
+  if (req.body.size() > (4u << 20)) return "{\"ok\":false}";
   auto j = json::parse(req.body, nullptr, false);
   Problem p;
   std::string batchId;
@@ -517,7 +532,18 @@ json App::rpcNewSession(const json& a) {
   emit({{"type", "busy"}, {"message", mode == "random" ? "Asking the Codeforces API for problems…" : "Fetching the problem…"}});
   sessionBusy_ = true;
   spawn([this, name, mode, lo, hi, url] {
-    struct Done { std::atomic<bool>& b; ~Done() { b = false; } } done{sessionBusy_};
+    // Whatever happens, the "busy" overlay must come down and the flag must clear.
+    struct Done {
+      App* app;
+      std::atomic<bool>& b;
+      ~Done() {
+        b = false;
+        if (std::uncaught_exceptions()) {
+          app->emit({{"type", "busy"}, {"message", ""}});
+          app->emit({{"type", "toast"}, {"toast", app->toast("Could not create the session (unexpected error)", "var(--bad)")}});
+        }
+      }
+    } done{this, sessionBusy_};
     HttpClient http;
     std::vector<Problem> probs;
     std::string error;
@@ -667,7 +693,7 @@ json App::rpcRun(const json& a) {
     int64_t t0 = util::nowMs();
     if (Toolchain::needsCompile(lang)) {
       emit({{"type", "compile"}, {"id", id}, {"state", "start"}});
-      auto cr = compileFor(tc, lang, dir);
+      auto cr = compileFor(tc, lang, dir, &runCancel_);
       if (!cr.ok) {
         emit({{"type", "runDone"}, {"id", id}, {"ok", false}, {"compileError", cr.log}, {"passed", 0}, {"total", (int)tests.size()}, {"ms", cr.ms}});
         running_ = false;
@@ -735,7 +761,9 @@ json App::rpcSubmit(const json& a) {
   judgeCancel_ = false;
   json config = config_;
   if (judgeSupportsInApp(snapshot.judge) && wv_) {
-    // In-app submission through the judge's window (UI thread).
+    // In-app submission through the judge's window (UI thread). A throw here (e.g. a
+    // mistyped id in config.json) must not leave judging_ stuck.
+    struct ResetOnThrow { std::atomic<bool>& f; bool armed = true; ~ResetOnThrow() { if (armed) f = false; } } guard{judging_};
     std::string pid = snapshot.id, url = snapshot.url;
     judgeWeb(snapshot.judge).submit(
         SubmitRequest{snapshot, lang, code}, config,
@@ -752,6 +780,7 @@ json App::rpcSubmit(const json& a) {
             emit({{"type", "judge"}, {"id", pid}, {"state", "error"}, {"message", sp.message}});
           }
         });
+    guard.armed = false;
     return {{"ok", true}};
   }
   judgeThread_ = std::thread([this, snapshot, lang, code, config] {

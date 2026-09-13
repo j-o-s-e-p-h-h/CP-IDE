@@ -29,6 +29,7 @@ class App {
   std::string rpc(const std::string& name, const json& args);
   // Competitive Companion -> C++ (called on the HTTP server thread)
   std::string onCompanionPost(const HttpRequest& req);
+  std::string onCompanionPostImpl(const HttpRequest& req);
   // C++ -> JS
   void emit(const json& ev);
   // Developer hook (only wired when CP_IDE_DEV=1): POST /__eval runs JS in the page and

@@ -53,9 +53,17 @@ std::unique_ptr<Judge> makeJudge(const std::string& judgeName) {
   return std::make_unique<BrowserOnlyJudge>("Judge", [](const Problem& p) { return p.url; });
 }
 
+// Only http(s) URLs and existing local folders are opened: ShellExecute/xdg-open would
+// happily run any other string (a local .exe path, a file: URL, ...).
+static bool openable(const std::string& target) {
+  if (util::isSafeHttpUrl(target)) return true;
+  std::error_code ec;
+  return fs::is_directory(util::upath(target), ec);
+}
+
 #ifdef _WIN32
 void openInBrowser(const std::string& url) {
-  if (url.empty()) return;
+  if (!openable(url)) return;
   ShellExecuteW(nullptr, L"open", util::widen(url).c_str(), nullptr, nullptr, SW_SHOWNORMAL);
 }
 
@@ -76,7 +84,7 @@ void copyToClipboard(const std::string& text) {
 #include "../runner.hpp"
 
 void openInBrowser(const std::string& url) {
-  if (url.empty()) return;
+  if (!openable(url)) return;
   std::string q = "'" + util::replaceAll(url, "'", "'\\''") + "'";
 #ifdef __APPLE__
   std::string cmd = "open " + q;

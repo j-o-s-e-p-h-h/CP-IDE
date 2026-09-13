@@ -81,11 +81,11 @@ struct CompileResult {
 };
 
 // Compiles main.cpp in dir into sol.exe (or debug build sol_debug.exe with -g -O0).
-CompileResult compileCpp(const Toolchain& tc, const fs::path& dir, bool debug = false);
+CompileResult compileCpp(const Toolchain& tc, const fs::path& dir, bool debug = false, std::atomic<bool>* cancel = nullptr);
 // javac Main.java -> Main.class in dir.
-CompileResult compileJava(const Toolchain& tc, const fs::path& dir);
+CompileResult compileJava(const Toolchain& tc, const fs::path& dir, std::atomic<bool>* cancel = nullptr);
 // Dispatches on language; languages without a compile step return ok.
-CompileResult compileFor(const Toolchain& tc, const std::string& lang, const fs::path& dir);
+CompileResult compileFor(const Toolchain& tc, const std::string& lang, const fs::path& dir, std::atomic<bool>* cancel = nullptr);
 
 struct TestVerdict {
   std::string status;  // pass | fail | tle | re

@@ -103,6 +103,9 @@ bool HttpServer::start(PostHandler onPost) {
 void HttpServer::stop() {
   if (!running_) return;
   running_ = false;
+#ifndef _WIN32
+  shutdown((SOCKET)listenSock_, SHUT_RDWR);  // wakes accept() on Linux/macOS; close alone does not
+#endif
   closesocket((SOCKET)listenSock_);
   if (thread_.joinable()) thread_.join();
 }
@@ -121,6 +124,15 @@ void HttpServer::loop() {
 }
 
 void HttpServer::handle(uintptr_t sk) {
+  // Detached thread: an escaping exception would terminate the whole app.
+  try {
+    handleImpl(sk);
+  } catch (...) {
+    closesocket((SOCKET)sk);
+  }
+}
+
+void HttpServer::handleImpl(uintptr_t sk) {
   SOCKET s = (SOCKET)sk;
 #ifdef _WIN32
   DWORD tmo = 15000;
@@ -175,20 +187,32 @@ void HttpServer::handle(uintptr_t sk) {
     auto q = path.find('?');
     if (q != std::string::npos) path = path.substr(0, q);
     if (path == "/" || path.empty()) path = "/index.html";
-    // very small percent-decoding for spaces etc.
+    // percent-decoding (bad escapes are kept literally rather than throwing)
     std::string dec;
     for (size_t i = 0; i < path.size(); ++i) {
-      if (path[i] == '%' && i + 2 < path.size()) {
+      if (path[i] == '%' && i + 2 < path.size() && isxdigit((unsigned char)path[i + 1]) && isxdigit((unsigned char)path[i + 2])) {
         dec += (char)std::stoi(path.substr(i + 1, 2), nullptr, 16);
         i += 2;
       } else dec += path[i];
     }
-    if (util::contains(dec, "..")) {
+    // Only plain relative paths under the ui folder: no "..", no drive/colon, no leading
+    // double slash or backslash (an absolute path would replace root_ in operator/).
+    std::string rel = dec.substr(1);
+    bool bad = util::contains(rel, "..") || util::contains(rel, ":") || util::contains(rel, "\\") || util::startsWith(rel, "/") ||
+               rel.find('\0') != std::string::npos;
+    fs::path file;
+    if (!bad) {
+      std::error_code ec;
+      file = fs::weakly_canonical(root_ / util::upath(rel), ec);
+      fs::path rootc = fs::weakly_canonical(root_, ec);
+      std::string f = util::pstr(file), r = util::pstr(rootc);
+      if (ec || f.size() <= r.size() || f.compare(0, r.size(), r) != 0 || (f[r.size()] != '/' && f[r.size()] != '\\')) bad = true;
+    }
+    if (bad) {
       out = response(403, "Forbidden", "forbidden", "text/plain");
     } else {
-      fs::path file = root_ / util::upath(dec.substr(1));
       auto data = util::readFile(file);
-      if (!data) out = response(404, "Not Found", "not found: " + dec, "text/plain");
+      if (!data) out = response(404, "Not Found", "not found", "text/plain");
       else out = response(200, "OK", *data, mimeFor(file));
     }
   } else {

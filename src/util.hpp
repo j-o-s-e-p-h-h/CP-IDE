@@ -243,10 +243,14 @@ inline std::string fmtClock(int64_t secs) {
 
 inline std::string envVar(const char* name) {
 #ifdef _WIN32
-  wchar_t buf[4096];
-  DWORD n = GetEnvironmentVariableW(widen(name).c_str(), buf, 4096);
-  if (n == 0 || n >= 4096) return {};
-  return narrow(std::wstring(buf, n));
+  std::wstring wname = widen(name);
+  DWORD need = GetEnvironmentVariableW(wname.c_str(), nullptr, 0);  // size incl. the terminator
+  if (need == 0) return {};
+  std::wstring buf(need, L'\0');
+  DWORD n = GetEnvironmentVariableW(wname.c_str(), buf.data(), need);
+  if (n == 0 || n >= need) return {};
+  buf.resize(n);
+  return narrow(buf);
 #else
   const char* v = getenv(name);
   return v ? v : "";
@@ -314,6 +318,33 @@ inline std::string htmlUnescape(std::string s) {
   s = replaceAll(s, "&nbsp;", " ");
   s = replaceAll(s, "&amp;", "&");
   return s;
+}
+
+// A URL we are willing to fetch / open / splice into a command line: http(s) only and
+// nothing but the characters RFC 3986 allows (no quotes, spaces, backslashes, $, backticks).
+inline bool isSafeHttpUrl(const std::string& u) {
+  if (!(startsWith(u, "http://") || startsWith(u, "https://"))) return false;
+  if (u.size() > 2048) return false;
+  for (unsigned char c : u) {
+    if (isalnum(c)) continue;
+    if (std::string("-._~:/?#[]@!&()*+,;=%").find((char)c) != std::string::npos) continue;
+    return false;
+  }
+  return true;
+}
+
+// Host part of a URL, lower-cased, without port ("www.codeforces.com").
+inline std::string urlHost(const std::string& u) {
+  auto p = u.find("://");
+  if (p == std::string::npos) return {};
+  auto start = p + 3;
+  auto end = u.find_first_of("/?#", start);
+  std::string hp = u.substr(start, end == std::string::npos ? std::string::npos : end - start);
+  auto at = hp.rfind('@');
+  if (at != std::string::npos) hp = hp.substr(at + 1);
+  auto colon = hp.find(':');
+  if (colon != std::string::npos) hp = hp.substr(0, colon);
+  return lower(hp);
 }
 
 inline std::string urlEncode(const std::string& s) {

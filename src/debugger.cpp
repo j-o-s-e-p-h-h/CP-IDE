@@ -76,8 +76,15 @@ bool Debugger::start(const Toolchain& tc, const std::string& lang, const fs::pat
       running_ = false;
       return false;
     }
-    proc_->write(stdinData);
-    proc_->closeStdin();
+    // Feed stdin from a helper thread: inputs above the pipe buffer (64 KiB) would otherwise
+    // block the UI thread here before the helper is even told to run.
+    {
+      auto* proc = proc_.get();
+      std::thread([proc, stdinData] {
+        proc->write(stdinData);
+        proc->closeStdin();
+      }).detach();
+    }
     // wait for the tool to connect (up to 8 s)
     fd_set fds;
     FD_ZERO(&fds);

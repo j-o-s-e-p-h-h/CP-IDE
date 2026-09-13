@@ -74,11 +74,22 @@ std::string absolutizeUrls(std::string s, const std::string& base) {
   return s;
 }
 
+// Statement HTML is rendered with innerHTML inside the app page, next to the RPC bridge,
+// and it comes from a site chosen by whoever POSTs to the local port. Strip everything that
+// can run code: script-like elements (with their content), event-handler attributes and
+// javascript:/data: URLs. The UI applies a DOM-based pass as well.
 std::string removeScripts(std::string s) {
-  static const std::regex sc(R"(<script[\s\S]*?</script>)", std::regex::icase);
-  static const std::regex st(R"(<style[\s\S]*?</style>)", std::regex::icase);
-  s = std::regex_replace(s, sc, "");
-  s = std::regex_replace(s, st, "");
+  static const std::regex blocks(R"(<(script|style|iframe|object|embed|svg|math|template|noscript|form|link|meta|base|frame|frameset|applet)\b[\s\S]*?(</\1\s*>|$))", std::regex::icase);
+  static const std::regex selfClosing(R"(<(link|meta|base|embed|input|button|textarea|select|frame)\b[^>]*>)", std::regex::icase);
+  static const std::regex onAttr(R"(\s+on[a-zA-Z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+))", std::regex::icase);
+  static const std::regex badUrl(R"(\s+(href|src|xlink:href|formaction|action|srcset|poster|background)\s*=\s*("\s*(javascript|data|vbscript)\s*:[^"]*"|'\s*(javascript|data|vbscript)\s*:[^']*'|\s*(javascript|data|vbscript)\s*:[^\s>]+))", std::regex::icase);
+  static const std::regex styleAttr(R"(\s+style\s*=\s*("[^"]*"|'[^']*'))", std::regex::icase);
+  s = std::regex_replace(s, blocks, "");
+  s = std::regex_replace(s, selfClosing, "");
+  s = std::regex_replace(s, onAttr, "");
+  s = std::regex_replace(s, badUrl, "");
+  // inline style with url() / expression() has been used for exfiltration; images keep max-width via CSS anyway
+  s = std::regex_replace(s, styleAttr, "");
   return s;
 }
 
@@ -266,6 +277,7 @@ StatementInfo parseGeneric(const std::string& doc, const std::string& url) {
 // Some sites (Codeforces behind Cloudflare) reject WinHTTP's TLS fingerprint with 403 but accept
 // the curl.exe that ships with Windows 10/11, so that is the fallback fetcher.
 static bool fetchWithCurl(const std::string& url, int& status, std::string& body) {
+  if (!util::isSafeHttpUrl(url)) return false;  // the URL is spliced into a command line below
   std::wstring curlExe;
   if (util::kWindows) {
     std::string sysRoot = util::envVar("SystemRoot");
@@ -293,8 +305,8 @@ static bool fetchWithCurl(const std::string& url, int& status, std::string& body
 
 StatementInfo fetchStatement(HttpClient& http, const std::string& url, const std::string& judge) {
   StatementInfo si;
-  if (url.empty()) {
-    si.error = "No URL";
+  if (url.empty() || !util::isSafeHttpUrl(url)) {
+    si.error = url.empty() ? "No URL" : "Unsupported URL";
     return si;
   }
   auto res = http.get(url);

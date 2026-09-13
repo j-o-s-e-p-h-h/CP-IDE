@@ -19,6 +19,7 @@ json Storage::config() {
       {"atcoder", {{"pythonLangId", 5055}, {"cppLangId", 5028}, {"javaLangId", 5005}, {"jsLangId", 5009}}},
       {"_help", "Fill codeforces.handle/password to submit from the app. Without them Submit opens the browser and copies your code."}};
   auto j = util::readJson(root_ / "config.json");
+  if (j && !j->is_object()) j.reset();
   if (!j) {
     util::writeJson(root_ / "config.json", def);
     return def;
@@ -40,7 +41,7 @@ void Storage::saveConfig(const json& j) {
 json Storage::loadState() {
   std::lock_guard lk(mu_);
   auto j = util::readJson(root_ / "state.json");
-  return j ? *j : json::object();
+  return j && j->is_object() ? *j : json::object();
 }
 
 void Storage::saveState(const json& j) {
