@@ -101,7 +101,9 @@ std::string App::onDevRequest(const HttpRequest& req) {
   // The dev hook runs JavaScript inside the privileged page. Browsers always send an
   // Origin header on cross-site fetches, so a request carrying one is refused; local
   // tools must also present the per-run token from <root>/dev.token.
-  if (!req.header("Origin").empty() || (!devToken_.empty() && req.header("X-CP-Dev") != devToken_ && req.path != "/__result"))
+  std::string origin = req.header("Origin");
+  bool ownOrigin = origin == "http://127.0.0.1:10045" || origin == "http://localhost:10045";
+  if ((!origin.empty() && !ownOrigin) || (!devToken_.empty() && req.header("X-CP-Dev") != devToken_ && req.path != "/__result"))
     return "{\"ok\":false,\"error\":\"forbidden\"}";
   if (req.path == "/__result" && req.method == "POST") {
     std::lock_guard lk(devMu_);
