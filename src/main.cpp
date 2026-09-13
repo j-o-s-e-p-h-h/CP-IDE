@@ -75,7 +75,10 @@ int runApp() {
   App app(dataRoot(), uiDir, toolsDir);
 
   HttpServer server(10045, uiDir);
-  if (util::envVar("CP_IDE_DEV") == "1") server.setDevHandler([&](const HttpRequest& r) { return app.onDevRequest(r); });
+  if (util::envVar("CP_IDE_DEV") == "1") {
+    app.enableDevHook();
+    server.setDevHandler([&](const HttpRequest& r) { return app.onDevRequest(r); });
+  }
   if (!server.start([&](const HttpRequest& r) { return app.onCompanionPost(r); })) {
     fatal("Could not listen on 127.0.0.1:10045.\n" + server.lastError() + "\n\nIs another CP IDE instance running?");
     return 1;

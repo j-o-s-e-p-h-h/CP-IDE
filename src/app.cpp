@@ -1,5 +1,6 @@
 #include "app.hpp"
 #include <algorithm>
+#include <random>
 #include "cf_api.hpp"
 #include "companion.hpp"
 #ifdef _WIN32
@@ -54,6 +55,14 @@ void App::shutdown() {
   for (int i = 0; i < 100 && bgCount_ > 0; ++i) std::this_thread::sleep_for(std::chrono::milliseconds(30));
 }
 
+void App::enableDevHook() {
+  std::random_device rd;
+  static const char* hex = "0123456789abcdef";
+  devToken_.clear();
+  for (int i = 0; i < 32; ++i) devToken_ += hex[rd() % 16];
+  util::writeFile(storage_.root() / "dev.token", devToken_);
+}
+
 void App::closeAuxWindows() {
   for (auto& [id, w] : judgeWebs_) w->destroyWindow();
 }
@@ -89,6 +98,11 @@ void App::emit(const json& ev) {
 }
 
 std::string App::onDevRequest(const HttpRequest& req) {
+  // The dev hook runs JavaScript inside the privileged page. Browsers always send an
+  // Origin header on cross-site fetches, so a request carrying one is refused; local
+  // tools must also present the per-run token from <root>/dev.token.
+  if (!req.header("Origin").empty() || (!devToken_.empty() && req.header("X-CP-Dev") != devToken_ && req.path != "/__result"))
+    return "{\"ok\":false,\"error\":\"forbidden\"}";
   if (req.path == "/__result" && req.method == "POST") {
     std::lock_guard lk(devMu_);
     devResult_ = req.body;
@@ -690,6 +704,18 @@ json App::rpcRun(const json& a) {
   runCancel_ = false;
   Toolchain tc = tc_;
   runThread_ = std::thread([this, tc, id, lang, dir, tests, tl] {
+    // An exception here (folder deleted mid-run, odd filesystem state) must end as a
+    // failed run, not as std::terminate of the whole IDE.
+    struct Done {
+      App* app;
+      std::string id;
+      int total;
+      ~Done() {
+        if (std::uncaught_exceptions())
+          app->emit({{"type", "runDone"}, {"id", id}, {"ok", false}, {"compileError", "Run failed unexpectedly (see the problem folder)"}, {"passed", 0}, {"total", total}, {"ms", 0}});
+        app->running_ = false;
+      }
+    } done{this, id, (int)tests.size()};
     int64_t t0 = util::nowMs();
     if (Toolchain::needsCompile(lang)) {
       emit({{"type", "compile"}, {"id", id}, {"state", "start"}});

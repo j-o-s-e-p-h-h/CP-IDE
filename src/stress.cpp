@@ -13,6 +13,19 @@ void StressRunner::start(const Toolchain& tc, const fs::path& dir, const std::st
   running_ = true;
   thread_ = std::thread([=, this] {
     StressEvent ev;
+    struct Done {  // an exception must surface as an error event, not kill the app
+      StressRunner* self;
+      std::function<void(const StressEvent&)> cb;
+      ~Done() {
+        if (std::uncaught_exceptions()) {
+          StressEvent e;
+          e.state = "error";
+          e.message = "Stress test failed unexpectedly";
+          cb(e);
+        }
+        self->running_ = false;
+      }
+    } done{this, cb};
     if (Toolchain::needsCompile(lang)) {
       ev.state = "running";
       ev.message = "compiling";

@@ -35,6 +35,8 @@ class App {
   // Developer hook (only wired when CP_IDE_DEV=1): POST /__eval runs JS in the page and
   // returns its (awaited) result; used by the automated checks.
   std::string onDevRequest(const HttpRequest& req);
+  // Creates the per-run secret local tools must send as X-CP-Dev (written to <root>/dev.token).
+  void enableDevHook();
 
  private:
   Storage storage_;
@@ -55,7 +57,7 @@ class App {
   std::atomic<int> bgCount_{0};
   std::mutex devMu_;
   std::condition_variable devCv_;
-  std::string devResult_;
+  std::string devResult_, devToken_;
   bool devHasResult_ = false;
   void spawn(std::function<void()> fn);  // detached worker; shutdown() waits for all of them
   StressRunner stress_;
