@@ -11,6 +11,12 @@ std::string judgeForUrl(const std::string& url);
 // Codeforces contest id + index from a URL; false when not a CF problem URL.
 bool parseCodeforcesUrl(const std::string& url, std::string& contestId, std::string& index);
 
+// A link to a whole contest rather than one problem, e.g.
+// codeforces.com/contest/2009 or atcoder.jp/contests/abc319 (including the
+// /standings, /my and virtual-participation variants people actually copy).
+// Sets contestId to the CF id or the AtCoder slug.
+bool parseContestUrl(const std::string& url, std::string& judge, std::string& contestId);
+
 // "D. Range Repaint" -> ("D", "Range Repaint"); "A - Title" -> ("A", "Title");
 // "Weird Algorithm" -> ("", "Weird Algorithm").
 void splitName(const std::string& name, std::string& index, std::string& title);

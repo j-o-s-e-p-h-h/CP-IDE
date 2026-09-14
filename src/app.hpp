@@ -89,6 +89,7 @@ class App {
   json rpcStress(const json& a, bool start);
   json rpcDebugStart(const json& a);
   json rpcImportUrl(const json& a);
+  json rpcImportContest(const std::string& url, const std::string& judge, const std::string& contestId);
   json rpcFormat(const json& a);
   void recordVerdict(const std::string& probId, const std::string& lang, const std::string& verdict, bool ok, const std::string& url);
 };

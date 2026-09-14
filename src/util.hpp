@@ -223,6 +223,16 @@ inline std::string clockHHMM(int64_t epochSec = 0) {
   return buf;
 }
 
+// "Sep 13" — always a real date, for naming things (prettyDate says "Today", which
+// makes a poor folder name).
+inline std::string dateStamp(int64_t epochSec = 0) {
+  time_t t = epochSec ? (time_t)epochSec : time(nullptr);
+  tm lt = localTime(t);
+  char buf[32];
+  strftime(buf, sizeof buf, "%b %d", &lt);
+  return buf;
+}
+
 // "Sep 2" style date, or "Today".
 inline std::string prettyDate(int64_t epochSec) {
   time_t t = (time_t)epochSec, now = time(nullptr);

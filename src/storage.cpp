@@ -90,6 +90,7 @@ bool Storage::loadProblem(const fs::path& dir, Problem& p) {
   p.interactive = meta->value("interactive", false);
   p.statementHtml = meta->value("statementHtml", "");
   p.statementExact = meta->value("statementExact", false);
+  p.statementSamples = meta->value("statementSamples", false);
   p.statementVersion = meta->value("statementVersion", 0);
   p.created = meta->value("created", (int64_t)0);
   p.cfContestId = meta->value("cfContestId", "");
@@ -114,9 +115,11 @@ bool Storage::loadProblem(const fs::path& dir, Problem& p) {
     auto in = util::readFile(tdir / (stem + ".in"));
     if (!in) return false;
     auto out = util::readFile(tdir / (stem + ".out"));
+    auto pre = util::readFile(tdir / (stem + ".pre"));  // hidden stdin prefix, usually absent
     TestCase t;
     t.in = *in;
     t.out = out ? *out : "";
+    t.pre = pre ? *pre : "";
     t.custom = custom;
     p.tests.push_back(t);
     return true;
@@ -138,6 +141,8 @@ bool Storage::loadContest(const std::string& dir, Contest& out) {
   out.name = meta->value("name", dir);
   out.kind = meta->value("kind", "contest");
   out.created = meta->value("created", (int64_t)0);
+  out.startSec = meta->value("startSec", (int64_t)0);
+  out.durationSec = meta->value("durationSec", (int64_t)0);
   out.activeProblem = meta->value("active", "");
   std::vector<std::string> order;
   if (meta->contains("order") && (*meta)["order"].is_array())
@@ -166,7 +171,9 @@ bool Storage::loadContest(const std::string& dir, Contest& out) {
 Contest Storage::createContest(const std::string& name, const std::string& kind) {
   std::lock_guard lk(mu_);
   Contest c;
-  c.name = util::trim(name).empty() ? "Practice Session" : util::trim(name);
+  // Dated rather than generic, so a week of unnamed sessions is not "Session (2)",
+  // "Session (3)"… and nothing claims to be "practice" during a live contest.
+  c.name = util::trim(name).empty() ? "Session — " + util::dateStamp() : util::trim(name);
   c.kind = kind;
   c.created = util::nowSec();
   std::string base = util::safeName(c.name);
@@ -183,7 +190,8 @@ void Storage::saveContestMeta(const Contest& c) {
   std::lock_guard lk(mu_);
   json order = json::array();
   for (auto& p : c.problems) order.push_back(p.dir);
-  json meta = {{"name", c.name}, {"kind", c.kind}, {"created", c.created}, {"active", c.activeProblem}, {"order", order}};
+  json meta = {{"name", c.name}, {"kind", c.kind}, {"created", c.created}, {"active", c.activeProblem}, {"order", order},
+               {"startSec", c.startSec}, {"durationSec", c.durationSec}};
   util::writeJson(contestDir(c) / "contest.json", meta);
 }
 
@@ -208,7 +216,7 @@ void Storage::addProblem(Contest& c, Problem p) {
     auto pdir = contestDir(c) / util::upath(p.dir);
     fs::create_directories(pdir / "tests", ec);
     for (auto& lang : languages())
-      if (!fs::exists(pdir / codeFile(lang), ec)) util::writeFile(pdir / codeFile(lang), "");
+      if (!fs::exists(pdir / codeFile(lang), ec)) util::writeFile(pdir / codeFile(lang), templateFor(lang));
     if (!fs::exists(pdir / "gen.py", ec)) util::writeFile(pdir / "gen.py", GEN_TEMPLATE);
     if (!fs::exists(pdir / "brute.py", ec)) util::writeFile(pdir / "brute.py", BRUTE_TEMPLATE);
   }
@@ -217,6 +225,16 @@ void Storage::addProblem(Contest& c, Problem p) {
   saveTests(c, p);
   c.problems.push_back(std::move(p));
   saveContestMeta(c);
+}
+
+bool Storage::deleteProblem(const Contest& c, const std::string& dir) {
+  std::lock_guard lk(mu_);
+  if (dir.empty() || util::contains(dir, "..") || util::contains(dir, "/") || util::contains(dir, "\\")) return false;
+  std::error_code ec;
+  auto path = contestDir(c) / util::upath(dir);
+  if (!fs::exists(path / "problem.json", ec)) return false;
+  fs::remove_all(path, ec);
+  return !ec;
 }
 
 void Storage::saveProblemMeta(const Contest& c, const Problem& p) {
@@ -232,6 +250,7 @@ void Storage::saveProblemMeta(const Contest& c, const Problem& p) {
                {"interactive", p.interactive},
                {"statementHtml", p.statementHtml},
                {"statementExact", p.statementExact},
+               {"statementSamples", p.statementSamples},
                {"statementVersion", p.statementVersion},
                {"created", p.created},
                {"cfContestId", p.cfContestId},
@@ -257,6 +276,7 @@ void Storage::saveTests(const Contest& c, const Problem& p) {
     std::string stem = t.custom ? "custom" + std::to_string(++cu) : std::to_string(++s);
     util::writeFile(tdir / (stem + ".in"), t.in);
     util::writeFile(tdir / (stem + ".out"), t.out);
+    if (!t.pre.empty()) util::writeFile(tdir / (stem + ".pre"), t.pre);
   }
 }
 
@@ -270,6 +290,28 @@ std::string Storage::loadCode(const Contest& c, const Problem& p, const std::str
 void Storage::saveCode(const Contest& c, const Problem& p, const std::string& lang, const std::string& code) {
   std::lock_guard lk(mu_);
   util::writeFile(problemDir(c, p) / codeFile(lang), code);
+}
+
+std::string Storage::templateFor(const std::string& lang) {
+  auto s = util::readFile(templatesDir() / codeFile(lang));
+  return s ? *s : std::string();
+}
+
+json Storage::loadTemplates() {
+  std::lock_guard lk(mu_);
+  json out = json::object();
+  for (auto& lang : languages()) out[lang] = templateFor(lang);
+  return out;
+}
+
+void Storage::saveTemplate(const std::string& lang, const std::string& code) {
+  std::lock_guard lk(mu_);
+  bool known = false;
+  for (auto& l : languages()) known = known || l == lang;
+  if (!known) return;
+  std::error_code ec;
+  fs::create_directories(templatesDir(), ec);
+  util::writeFile(templatesDir() / codeFile(lang), code);
 }
 
 std::vector<HistoryEntry> Storage::loadHistory() {

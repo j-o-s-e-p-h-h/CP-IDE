@@ -8,13 +8,21 @@ and keep a verdict history. Everything is free, nothing is paywalled.
 
 - **C++ core** with a native window through [webview/webview](https://github.com/webview/webview) (WebView2 on Windows).
 - **Monaco** editor with VS Code Dark+/Light+ colours and rainbow bracket pairs.
-- Five layouts: Default, Leet, Note-taking, Debug, Focus Mode. Dark by default, light toggle.
+- Four layouts: Default, Note-taking, Debug, Focus Mode. Dark by default, light toggle.
 - Per-problem timer (stopwatch / countdown, presets, pause, reset), notes, breakpoints, tests.
 - Local runs for Python, C++ (`g++ -O2 -std=c++23`), Java (`javac` + `java`) and JavaScript (`node`) with PASS / FAIL / TLE / RE verdicts.
 - Stress testing with `gen.py` + `brute.py`, a real debugger (Python through `bdb`, C++ through gdb/MI).
 - Judge submission behind one interface: Codeforces implemented (login + submit + verdict polling),
   AtCoder / CSES / USACO / HackerRank fall back to a browser submit with the code on the clipboard.
-- New practice sessions: blank, three random unsolved Codeforces problems by rating, or from a URL.
+- New sessions: blank, three random unsolved Codeforces problems by rating, or from a URL. Left unnamed, a session is called `Session — Sep 13` (the date) or `Random 1200–1500` (the band).
+
+## Starting up
+
+A splash covers the window while Monaco loads, then every launch lands on the **home screen**:
+resume the session you were in, reopen a recent contest, start a session, paste a problem URL,
+and see whether Competitive Companion is being listened for and which compilers were found.
+`Esc` (or Resume) goes on to the editor; the logo in the top bar and contest menu → Home bring
+it back.
 
 ## Install (users)
 
@@ -92,7 +100,8 @@ Default data root is `%USERPROFILE%\cp` (override with the `CP_IDE_HOME` environ
 ```
 cp/
   config.json                 tool paths + Codeforces credentials
-  state.json                  last contest, layout, theme
+  state.json                  last contest, layout, theme, pane sizes
+  templates/main.cpp ...      your boilerplate, copied into every new problem
   history.json                every submission verdict
   contests/<contest>/contest.json
   contests/<contest>/<problem>/
@@ -105,10 +114,24 @@ cp/
 
 Contests are listed, reopened and deleted (folder removed) from the contest menu in the top bar.
 
+### Joining a live or virtual contest
+
+Two ways, both of which create one contest folder with every problem in it:
+
+- **Paste the contest URL** into the `+` box in the top bar or the box on the home screen —
+  `https://codeforces.com/contest/2009` or `https://atcoder.jp/contests/abc319`. Every problem
+  is imported with its statement, limits and sample tests. Works for a round that is running,
+  upcoming or long finished, and for virtual participation.
+- **Competitive Companion**: open the contest page in your browser and click the green **+**
+  there; it sends the whole batch at once.
+
+When Codeforces publishes a countdown for the round (live or virtual), the remaining time
+appears next to the contest name in the top bar and turns red in the last 15 minutes.
+
 ### Where does an imported problem go?
 
 - A whole-contest click (Companion batch) goes into a contest folder named after the contest.
-- A single problem goes into the currently open practice session; if a contest is open instead,
+- A single problem goes into the currently open session; if a contest is open instead,
   it goes into the contest folder for that problem's contest (created if needed).
 
 ## Submitting
@@ -149,9 +172,48 @@ An empty value means auto-detect.
 
 ## Shortcuts
 
-- `Ctrl+Enter` run all tests
-- `Esc` leave Focus Mode / close menus
-- Click a line number to toggle a breakpoint (used by Debug ▶ in the Debug layout)
+Press `F1` in the app (or the `?` button in the top bar) for this list.
+
+| Key | Does |
+| --- | --- |
+| `Ctrl+Enter` | Run all tests |
+| `Ctrl+Shift+Enter` | Submit |
+| `Ctrl+.` | Stop the run |
+| `Alt+←` / `Alt+→` | Previous / next problem |
+| `Alt+1` … `Alt+9` | Jump to a problem |
+| `Ctrl+Alt+C` | Copy the whole solution |
+| `Ctrl+Shift+T` | Add a test case |
+| `Ctrl+B` | Show / hide the test panel |
+| `Ctrl+ +` / `Ctrl+ -` / `Ctrl+0` | Editor font size |
+| `Ctrl+Shift+F` | Focus Mode |
+| `Esc` | Leave Focus Mode / close menus |
+
+Click a line number to toggle a breakpoint (used by Debug ▶ in the Debug layout). `F5` and
+`Ctrl+R` are deliberately inert: a reload mid-contest would throw away the editor's undo history.
+
+## Test cases
+
+Codeforces packs its whole sample into one block of `t` test cases, but tags every line with
+the case it belongs to — so the import splits it into one test per case, each with its own
+expected output and `1` as its count line. A verdict then names the case that failed instead of
+pointing at a wall of text. Problems with a single case, and judges that do not tag their
+samples, are left as they are. Refreshing a statement re-reads the samples; cases you added
+yourself are kept.
+
+Each case has a ▶ that runs only that one, a ⧉ that copies its input, and its wall-clock time
+next to the verdict. A failing case shows the first line and token where your output and the
+expected answer part ways. Leaving **Expected** empty is allowed: the case then reports `OUT`
+with whatever your program printed, and ✓ turns that output into the expected answer.
+
+Both the statement/editor split and the height of the test panel are draggable, and
+double-clicking a divider puts it back to the layout default.
+
+## Code templates
+
+New problems start from `cp/templates/` (`main.cpp`, `main.py`, `Main.java`, `main.js`), which
+is empty until you put something there. Contest menu → Setup → **Code templates** edits them,
+with a starter for each language one click away. Existing problems are untouched; `↺` above the
+editor pulls the template into the file you are looking at.
 
 ## Repository layout
 

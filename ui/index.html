@@ -12,6 +12,15 @@
 <script src="katex/auto-render.min.js"></script>
 </head>
 <body>
+<!-- Covers the blank frame while the AMD loader pulls Monaco in; app.js removes it. -->
+<div id="splash">
+  <div class="sp-inner">
+    <img class="sp-logo sp-dark" src="assets/logo-white.png" alt="">
+    <img class="sp-logo sp-light" src="assets/logo.png" alt="">
+    <div class="sp-name">CP IDE</div>
+    <div class="sp-bar"><span></span></div>
+  </div>
+</div>
 <div id="app"></div>
 <div id="editor-host"><div id="monaco"></div></div>
 <script src="vs/loader.js"></script>

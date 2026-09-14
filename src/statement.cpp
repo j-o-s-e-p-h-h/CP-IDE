@@ -1,38 +1,45 @@
 #include "statement.hpp"
+#include <map>
 #include <regex>
 #include "companion.hpp"
 #include "runner.hpp"
 
 namespace html {
 
-std::string extractDiv(const std::string& doc, const std::string& marker, size_t* startPos, size_t* endPos) {
+std::string extractTag(const std::string& doc, const std::string& marker, const std::string& tag,
+                       size_t* startPos, size_t* endPos) {
+  const std::string openTag = "<" + tag, closeTag = "</" + tag;
   size_t m = doc.find(marker);
   if (m == std::string::npos) return {};
-  size_t open = doc.rfind("<div", m);
+  size_t open = doc.rfind(openTag, m);
   if (open == std::string::npos) return {};
   size_t tagEnd = doc.find('>', m);
   if (tagEnd == std::string::npos) return {};
   int depth = 1;
   size_t pos = tagEnd + 1;
   while (depth > 0) {
-    size_t a = doc.find("<div", pos);
-    size_t b = doc.find("</div", pos);
+    size_t a = doc.find(openTag, pos);
+    size_t b = doc.find(closeTag, pos);
     if (b == std::string::npos) return {};
     if (a != std::string::npos && a < b) {
       depth++;
-      pos = a + 4;
+      pos = a + openTag.size();
     } else {
       depth--;
       if (depth == 0) {
         size_t close = doc.find('>', b);
         if (startPos) *startPos = open;
-        if (endPos) *endPos = close == std::string::npos ? b + 6 : close + 1;
+        if (endPos) *endPos = close == std::string::npos ? b + closeTag.size() + 1 : close + 1;
         return doc.substr(tagEnd + 1, b - tagEnd - 1);
       }
-      pos = b + 5;
+      pos = b + closeTag.size();
     }
   }
   return {};
+}
+
+std::string extractDiv(const std::string& doc, const std::string& marker, size_t* startPos, size_t* endPos) {
+  return extractTag(doc, marker, "div", startPos, endPos);
 }
 
 std::string stripTags(const std::string& s) {
@@ -106,18 +113,64 @@ std::string attr(const std::string& tag, const std::string& name) {
 
 namespace {
 
+// Codeforces writes "2 seconds", AtCoder "2 sec"; memory is "256 megabytes" on
+// Codeforces and "1024 MiB" on AtCoder. Missing either one used to leave the
+// problem on the 1 s / 256 MB defaults, which shows the wrong limits and marks
+// perfectly fast solutions TLE locally.
 double parseSeconds(const std::string& text) {
-  static const std::regex re(R"(([\d.]+)\s*second)");
+  static const std::regex re(R"(([\d.]+)\s*(?:seconds?|secs?|s)\b)", std::regex::icase);
   std::smatch m;
   if (std::regex_search(text, m, re)) return atof(m[1].str().c_str());
   return 0;
 }
 
 int parseMegabytes(const std::string& text) {
-  static const std::regex re(R"((\d+)\s*megabyte)");
+  static const std::regex re(R"((\d+)\s*(?:megabytes?|MiB|MB)\b)", std::regex::icase);
   std::smatch m;
   if (std::regex_search(text, m, re)) return atoi(m[1].str().c_str());
   return 0;
+}
+
+// Codeforces wraps every sample line in <div class="… test-example-line-N">, where N
+// is the test case the line belongs to and 0 is the shared preamble (the "t" line).
+// Both the input and the output block are tagged, which is what lets the site
+// highlight a case and its answer together.
+std::map<int, std::vector<std::string>> taggedLines(const std::string& preHtml, int& maxIdx) {
+  static const std::regex re(R"(<div[^>]*test-example-line-(\d+)[^>]*>([\s\S]*?)</div>)");
+  std::map<int, std::vector<std::string>> out;
+  maxIdx = 0;
+  for (auto it = std::sregex_iterator(preHtml.begin(), preHtml.end(), re); it != std::sregex_iterator(); ++it) {
+    int idx = atoi((*it)[1].str().c_str());
+    out[idx].push_back(util::rtrim(html::stripTags((*it)[2].str())));
+    maxIdx = std::max(maxIdx, idx);
+  }
+  return out;
+}
+
+// One sample holding t test cases becomes t tests, each with its own expected
+// output, so a verdict names the case that failed instead of the whole blob.
+// Each case shows exactly the lines Codeforces shows for it. The "1 test case"
+// count line a solution expects to read first is kept out of sight in `pre`, so the
+// box is not cluttered with a line that is not part of the case.
+bool splitMultiTest(const std::string& inRaw, const std::string& outRaw, std::vector<TestCase>& out) {
+  int mi = 0, mo = 0;
+  auto in = taggedLines(inRaw, mi);
+  auto ou = taggedLines(outRaw, mo);
+  if (mi < 2 || mi != mo) return false;
+  auto pre = in.find(0);
+  // Only safe when the preamble is exactly the count of cases: that is the line the
+  // per-case input has to replace with "1".
+  if (pre == in.end() || pre->second.size() != 1 || util::trim(pre->second[0]) != std::to_string(mi)) return false;
+  for (int i = 1; i <= mi; ++i)
+    if (!in.count(i) || !ou.count(i)) return false;
+  for (int i = 1; i <= mi; ++i) {
+    TestCase tc;
+    tc.pre = "1\n";
+    for (auto& l : in[i]) tc.in += l + "\n";
+    for (auto& l : ou[i]) tc.out += l + "\n";
+    out.push_back(tc);
+  }
+  return true;
 }
 
 StatementInfo parseCodeforces(const std::string& doc, const std::string& url) {
@@ -144,36 +197,63 @@ StatementInfo parseCodeforces(const std::string& doc, const std::string& url) {
   if (!samples.empty()) {
     // Each sample is: class="input" ... <pre>IN</pre> ... class="output" ... <pre>OUT</pre>.
     // Take the first <pre> after each marker; this does not depend on div nesting.
-    auto preAfter = [&](size_t from, size_t& end) -> std::string {
+    auto preRawAfter = [&](size_t from, size_t& end) -> std::string {
       size_t p = samples.find("<pre", from);
       if (p == std::string::npos) return std::string();
       size_t e = samples.find('>', p);
       size_t q = e == std::string::npos ? std::string::npos : samples.find("</pre>", e);
       if (q == std::string::npos) return std::string();
       end = q + 6;
-      return html::preToText(samples.substr(e + 1, q - e - 1));
+      return samples.substr(e + 1, q - e - 1);
     };
+    std::vector<std::pair<std::string, std::string>> raws;
     size_t pos = 0;
     while (true) {
       size_t a = samples.find("class=\"input\"", pos);
       if (a == std::string::npos) break;
       size_t inEnd = a;
-      std::string in = preAfter(a, inEnd);
+      std::string inRaw = preRawAfter(a, inEnd);
       size_t outA = samples.find("class=\"output\"", inEnd);
       if (outA == std::string::npos) break;
       size_t outEnd = outA;
-      std::string out = preAfter(outA, outEnd);
+      std::string outRaw = preRawAfter(outA, outEnd);
+      std::string in = html::preToText(inRaw), out = html::preToText(outRaw);
       if (util::trim(in).empty() && util::trim(out).empty()) break;
       TestCase tc;
       tc.in = in;
       tc.out = out;
       si.samples.push_back(tc);
+      raws.emplace_back(inRaw, outRaw);
       pos = outEnd;
+    }
+    // A single sample carrying many test cases is worth one test per case.
+    if (si.samples.size() == 1 && raws.size() == 1) {
+      std::vector<TestCase> split;
+      if (splitMultiTest(raws[0].first, raws[0].second, split)) si.samples = std::move(split);
+    }
+  }
+  // Codeforces answers an index that does not exist (asking for G when the problem
+  // is split into G1/G2/G3) with a page that still carries a problem-statement
+  // block — for an unrelated problem. Importing that silently would give you the
+  // wrong statement and no samples, so refuse it instead.
+  {
+    std::string wantContest, wantIndex;
+    companion::parseCodeforcesUrl(url, wantContest, wantIndex);
+    std::string gotIndex = util::lower(si.index), want = util::lower(wantIndex);
+    if (!want.empty() && !gotIndex.empty() && gotIndex != want) {
+      si.error = "Codeforces returned problem " + si.index + " for a link to " + wantIndex +
+                 " — that index may only exist as " + wantIndex + "1 / " + wantIndex + "2";
+      return si;
+    }
+    if (si.samples.empty() && si.timeLimitSec <= 0) {
+      si.error = "That Codeforces page has no problem on it (check the contest and index)";
+      return si;
     }
   }
   // The whole problem block (header, legend, specs, samples, note) is kept so the
   // Description pane can show the statement exactly as Codeforces renders it.
   si.exact = true;
+  si.selfSamples = true;
   // rating from the sidebar tag box
   {
     static const std::regex re(R"(title="Difficulty"[^>]*>\s*\*(\d+))");
@@ -185,6 +265,60 @@ StatementInfo parseCodeforces(const std::string& doc, const std::string& url) {
   return si;
 }
 
+// AtCoder writes every formula as bare LaTeX inside <var>…</var> with no delimiters,
+// so KaTeX never sees it and the reader gets "1\leq M\leq N\leq2\times10 ^ 5" as text.
+// Outside a <pre> the tags become \( … \); inside one KaTeX does not run at all
+// (auto-render skips <pre>), so there the tags are dropped and the text kept as is.
+std::string varsToTex(const std::string& s) {
+  std::string out;
+  out.reserve(s.size() + 32);
+  for (size_t i = 0; i < s.size();) {
+    if (s.compare(i, 4, "<var") == 0) {
+      size_t close = s.find('>', i);
+      if (close != std::string::npos) {
+        out += "\\(";
+        i = close + 1;
+        continue;
+      }
+    }
+    if (s.compare(i, 6, "</var>") == 0) {
+      out += "\\)";
+      i += 6;
+      continue;
+    }
+    out += s[i++];
+  }
+  return out;
+}
+
+std::string atcoderMath(const std::string& s) {
+  std::string out;
+  out.reserve(s.size() + 128);
+  size_t i = 0;
+  while (i < s.size()) {
+    size_t pre = s.find("<pre", i);
+    if (pre == std::string::npos) {
+      out += varsToTex(s.substr(i));
+      break;
+    }
+    out += varsToTex(s.substr(i, pre - i));
+    size_t open = s.find('>', pre);
+    size_t end = open == std::string::npos ? std::string::npos : s.find("</pre>", open);
+    if (end == std::string::npos) {
+      out += s.substr(pre);
+      break;
+    }
+    std::string body = s.substr(open + 1, end - open - 1);
+    // The input-format block is a <pre> full of <var>s. KaTeX's auto-render skips
+    // <pre> entirely, so that one becomes a styled div and keeps its maths; the
+    // sample input/output blocks hold no <var> and stay verbatim <pre>.
+    if (body.find("<var") != std::string::npos) out += "<div class=\"io-format\">" + varsToTex(body) + "</div>";
+    else out += s.substr(pre, end + 6 - pre);
+    i = end + 6;
+  }
+  return out;
+}
+
 StatementInfo parseAtCoder(const std::string& doc, const std::string& url) {
   StatementInfo si;
   std::string stmt = html::extractDiv(doc, "id=\"task-statement\"");
@@ -192,11 +326,12 @@ StatementInfo parseAtCoder(const std::string& doc, const std::string& url) {
     si.error = "No task statement found on the page";
     return si;
   }
-  // Prefer the English version when both languages are present.
-  size_t en = stmt.find("class=\"lang-en\"");
-  if (en != std::string::npos) {
-    size_t s = 0, e = 0;
-    std::string enHtml = html::extractDiv(stmt, "class=\"lang-en\"", &s, &e);
+  // Prefer the English version when both languages are present. AtCoder wraps each
+  // language in a <span>, not a <div> — balancing on <div> used to fail silently and
+  // leave the Japanese and English statements (and every figure) in twice.
+  if (stmt.find("class=\"lang-en\"") != std::string::npos) {
+    std::string enHtml = html::extractTag(stmt, "class=\"lang-en\"", "span");
+    if (enHtml.empty()) enHtml = html::extractDiv(stmt, "class=\"lang-en\"");
     if (!enHtml.empty()) stmt = enHtml;
   }
   {
@@ -209,12 +344,21 @@ StatementInfo parseAtCoder(const std::string& doc, const std::string& url) {
       si.title = t;
     }
   }
-  si.timeLimitSec = parseSeconds(html::stripTags(doc.substr(0, std::min<size_t>(doc.size(), 200000))));
+  // AtCoder prints both on one line: "Time Limit: 2 sec / Memory Limit: 1024 MiB".
+  si.timeLimitSec = 0;
   si.memoryMB = 0;
   {
-    static const std::regex re(R"(Memory Limit:\s*(\d+)\s*MB)");
+    static const std::regex re(R"(Time Limit:\s*([\d.]+)\s*sec[^/]*/\s*Memory Limit:\s*(\d+)\s*(?:MiB|MB))", std::regex::icase);
     std::smatch m;
-    if (std::regex_search(doc, m, re)) si.memoryMB = atoi(m[1].str().c_str());
+    if (std::regex_search(doc, m, re)) {
+      si.timeLimitSec = atof(m[1].str().c_str());
+      si.memoryMB = atoi(m[2].str().c_str());
+    }
+  }
+  if (si.timeLimitSec <= 0) {
+    std::string head = html::stripTags(doc.substr(0, std::min<size_t>(doc.size(), 200000)));
+    si.timeLimitSec = parseSeconds(head);
+    if (si.memoryMB <= 0) si.memoryMB = parseMegabytes(head);
   }
   // samples: <h3>Sample Input N</h3><pre>...</pre>
   {
@@ -227,7 +371,11 @@ StatementInfo parseAtCoder(const std::string& doc, const std::string& url) {
     }
     for (auto& [n, tc] : map) si.samples.push_back(tc);
   }
-  si.html = html::absolutizeUrls(html::removeScripts(stmt), url);
+  // The statement carries its own "Sample Input/Output" sections, and the explanations
+  // there are where AtCoder puts its figures — so keep them and let the UI skip its
+  // own copy rather than showing every sample twice.
+  si.selfSamples = true;
+  si.html = atcoderMath(html::absolutizeUrls(html::removeScripts(stmt), url));
   si.ok = true;
   return si;
 }
@@ -303,15 +451,11 @@ static bool fetchWithCurl(const std::string& url, int& status, std::string& body
   return true;
 }
 
-StatementInfo fetchStatement(HttpClient& http, const std::string& url, const std::string& judge) {
-  StatementInfo si;
-  if (url.empty() || !util::isSafeHttpUrl(url)) {
-    si.error = url.empty() ? "No URL" : "Unsupported URL";
-    return si;
-  }
+bool fetchPage(HttpClient& http, const std::string& url, int& status, std::string& body) {
+  if (url.empty() || !util::isSafeHttpUrl(url)) return false;
   auto res = http.get(url);
-  int status = res.status;
-  std::string body = res.body;
+  status = res.status;
+  body = res.body;
   if (!res.error.empty() || status == 403 || status == 503) {
     int st2 = 0;
     std::string b2;
@@ -319,9 +463,25 @@ StatementInfo fetchStatement(HttpClient& http, const std::string& url, const std
       status = st2;
       body = b2;
     } else if (!res.error.empty()) {
-      si.error = res.error;
-      return si;
+      status = 0;
+      body = res.error;
+      return false;
     }
+  }
+  return true;
+}
+
+StatementInfo fetchStatement(HttpClient& http, const std::string& url, const std::string& judge) {
+  StatementInfo si;
+  if (url.empty() || !util::isSafeHttpUrl(url)) {
+    si.error = url.empty() ? "No URL" : "Unsupported URL";
+    return si;
+  }
+  int status = 0;
+  std::string body;
+  if (!fetchPage(http, url, status, body)) {
+    si.error = body.empty() ? "Could not reach the site" : body;
+    return si;
   }
   if (status != 200) {
     si.error = "HTTP " + std::to_string(status) + (status == 403 ? " (blocked by the site's anti-bot check)" : "");

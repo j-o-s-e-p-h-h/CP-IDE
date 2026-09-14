@@ -88,11 +88,21 @@ CompileResult compileJava(const Toolchain& tc, const fs::path& dir, std::atomic<
 CompileResult compileFor(const Toolchain& tc, const std::string& lang, const fs::path& dir, std::atomic<bool>* cancel = nullptr);
 
 struct TestVerdict {
-  std::string status;  // pass | fail | tle | re
+  std::string status;  // pass | fail | tle | re | out (no expected output to compare against)
   std::string got;
   int ms = 0;
 };
 
+// Short human sentence for a failed run: the Python exception, the C++ exception
+// type and message, whatever reached stderr, or what the bare exit code means
+// (3221225477 -> "access violation", 139 -> "segmentation fault"). Empty when the
+// verdict does not need explaining. Shared so every front end says the same thing.
+std::string explainVerdict(const TestVerdict& v, double timeLimitSec);
+
 // Runs one test. Compilation must have happened already for C++.
+// scratchIfNoExpected: a test whose expected output is blank reports "out" (here is
+// what your program printed) instead of comparing against nothing. Only the UI's own
+// test list wants that — the stress tester always has a real reference output, even
+// when the brute force legitimately prints nothing.
 TestVerdict runTest(const Toolchain& tc, const std::string& lang, const fs::path& dir, const TestCase& t,
-                    double timeLimitSec, std::atomic<bool>* cancel = nullptr);
+                    double timeLimitSec, std::atomic<bool>* cancel = nullptr, bool scratchIfNoExpected = false);

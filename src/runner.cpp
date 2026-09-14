@@ -49,6 +49,13 @@ bool Process::start(const std::wstring& cmdline, const fs::path& cwd,
                     std::function<void(const std::string&)> onStdout,
                     std::function<void(const std::string&)> onStderr) {
   std::lock_guard spawnLock(g_spawnMutex);
+  // Children inherit this: no "program has stopped working" box, no hard-error
+  // dialog waiting on a user who is looking at the IDE, not at a hidden window.
+  static const bool errorModeSet = [] {
+    SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
+    return true;
+  }();
+  (void)errorModeSet;
   Pipe in, out, err;
   if (!in.create(true, false) || !out.create(false, true) || !err.create(false, true)) {
     error_ = "CreatePipe failed";
@@ -64,10 +71,14 @@ bool Process::start(const std::wstring& cmdline, const fs::path& cwd,
   std::wstring cmd = cmdline;  // CreateProcessW may modify the buffer
   std::wstring wcwd = cwd.wstring();
   // Job object so that killing the process also kills any children.
+  // DIE_ON_UNHANDLED_EXCEPTION matters as much: without it a solution that segfaults
+  // or aborts is held by Windows Error Reporting while WerFault collects a dump, so
+  // the crash looks like a hang and gets reported as TLE instead of the real error.
   hJob_ = CreateJobObjectW(nullptr, nullptr);
   if (hJob_) {
     JOBOBJECT_EXTENDED_LIMIT_INFORMATION jeli{};
-    jeli.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+    jeli.BasicLimitInformation.LimitFlags =
+        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION;
     SetInformationJobObject(hJob_, JobObjectExtendedLimitInformation, &jeli, sizeof jeli);
   }
   BOOL ok = CreateProcessW(nullptr, cmd.data(), nullptr, nullptr, TRUE,
@@ -385,14 +396,90 @@ CompileResult compileCpp(const Toolchain& tc, const fs::path& dir, bool debug, s
   return cr;
 }
 
+std::string explainVerdict(const TestVerdict& v, double timeLimitSec) {
+  if (v.status == "tle") {
+    char buf[64];
+    snprintf(buf, sizeof buf, "did not finish within the %.10g s limit", timeLimitSec > 0 ? timeLimitSec : 1.0);
+    return buf;
+  }
+  if (v.status != "re") return {};
+
+  // A bare exit code says nothing; these are the ones a solution actually hits.
+  struct Known { long long code; const char* meaning; };
+  static const Known kKnown[] = {
+      {3221225477LL, "access violation - read or wrote memory it does not own (out-of-bounds index, bad pointer)"},
+      {3221225725LL, "stack overflow - recursion too deep, or a huge array declared inside a function"},
+      {3221225620LL, "integer division by zero"},
+      {3221226356LL, "heap corruption - wrote past the end of an allocation"},
+      {139, "segmentation fault - out-of-bounds index or bad pointer"},
+      {136, "floating point exception - division by zero"},
+      {134, "aborted - a failed assert, or an uncaught C++ exception"},
+      {137, "killed - out of memory"},
+  };
+
+  std::vector<std::string> lines;
+  long long exitCode = 0;
+  bool haveExit = false;
+  for (auto& raw : util::split(util::replaceAll(v.got, "\r", ""), '\n')) {
+    std::string l = util::rtrim(raw);
+    if (util::trim(l).empty()) continue;
+    std::string t = util::trim(l);
+    if (util::startsWith(t, "(exit code ") && util::endsWith(t, ")")) {
+      exitCode = atoll(t.c_str() + 11);
+      haveExit = true;
+      continue;
+    }
+    lines.push_back(l);
+  }
+
+  std::string msg;
+  bool python = false, thrown = false;
+  for (auto& l : lines) {
+    if (util::startsWith(l, "Traceback (most recent call last)")) python = true;
+    if (util::startsWith(l, "terminate called after throwing an instance of")) thrown = true;
+  }
+  if (python && !lines.empty()) {
+    msg = util::trim(lines.back());  // the exception line ends a traceback
+  } else if (thrown) {
+    // Two lines of noise carry one fact each: the type, then the message.
+    std::string type, what;
+    for (auto& l : lines) {
+      if (util::startsWith(l, "terminate called after throwing an instance of")) {
+        auto a = l.find('\''), b = l.rfind('\'');
+        if (a != std::string::npos && b > a) type = l.substr(a + 1, b - a - 1);
+      }
+      auto w = l.find("what():");
+      if (w != std::string::npos) what = util::trim(l.substr(w + 7));
+    }
+    msg = !type.empty() && !what.empty() ? type + ": " + what : (!type.empty() ? type : what);
+  } else {
+    for (auto& l : lines) {
+      std::string t = util::trim(l);
+      if (t == "(no output)") continue;
+      msg = t;  // last meaningful line, usually the stderr message
+    }
+  }
+
+  if (haveExit) {
+    for (auto& k : kKnown)
+      if (k.code == exitCode || (unsigned long long)k.code == (unsigned int)exitCode) {
+        msg = msg.empty() ? k.meaning : msg + "  -  " + k.meaning;
+        return msg;
+      }
+    if (msg.empty()) msg = "exited with code " + std::to_string(exitCode);
+  }
+  return msg;
+}
+
 TestVerdict runTest(const Toolchain& tc, const std::string& lang, const fs::path& dir, const TestCase& t,
-                    double timeLimitSec, std::atomic<bool>* cancel) {
+                    double timeLimitSec, std::atomic<bool>* cancel, bool scratchIfNoExpected) {
   TestVerdict v;
   int tl = (int)(timeLimitSec * 1000);
   if (tl <= 0) tl = 1000;
   // Give Python and interpreter startup some slack, as judges do.
   int hard = lang == "python" ? tl * 3 + 2000 : tl * 2 + 500;
-  auto r = runProcess(tc.runCommand(lang, dir), dir, t.in, hard, cancel);
+  // t.pre is the part of stdin the test box does not show (a split sample's count line).
+  auto r = runProcess(tc.runCommand(lang, dir), dir, t.pre + t.in, hard, cancel);
   v.ms = r.ms;
   if (!r.started) {
     v.status = "re";
@@ -415,6 +502,14 @@ TestVerdict runTest(const Toolchain& tc, const std::string& lang, const fs::path
   std::string got = util::normalizeOutput(r.out);
   std::string exp = util::normalizeOutput(t.out);
   v.got = got;
+  if (scratchIfNoExpected && util::trim(t.out).empty()) {
+    // No expected output recorded: a scratch input the user wants to see the answer
+    // for. Showing it as FAIL would be a lie, so report it separately.
+    v.status = "out";
+    if (v.got.empty()) v.got = "(no output)";
+    if (!util::trim(r.err).empty()) v.got += "\n[stderr] " + util::trim(r.err);
+    return v;
+  }
   v.status = got == exp ? "pass" : "fail";
   if (v.status == "fail" && !util::trim(r.err).empty()) v.got += "\n[stderr] " + util::trim(r.err);
   if (v.status == "fail" && got.empty()) v.got = "(no output)";

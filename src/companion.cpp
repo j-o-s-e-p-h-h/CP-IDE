@@ -33,6 +33,30 @@ bool parseCodeforcesUrl(const std::string& url, std::string& contestId, std::str
   return false;
 }
 
+bool parseContestUrl(const std::string& url, std::string& judge, std::string& contestId) {
+  std::string j = judgeForUrl(url);
+  if (j == "codeforces") {
+    // A problem link is not a contest link, even though it contains the contest id.
+    if (util::contains(url, "/problem/") || util::contains(url, "/problemset/problem/")) return false;
+    static const std::regex re(R"((?:contest|gym)/(\d+))");
+    std::smatch m;
+    if (!std::regex_search(url, m, re)) return false;
+    judge = "codeforces";
+    contestId = m[1];
+    return true;
+  }
+  if (j == "atcoder") {
+    if (util::contains(url, "/tasks/")) return false;
+    static const std::regex re(R"(atcoder\.jp/contests/([A-Za-z0-9_\-]+))");
+    std::smatch m;
+    if (!std::regex_search(url, m, re)) return false;
+    judge = "atcoder";
+    contestId = m[1];
+    return true;
+  }
+  return false;
+}
+
 void splitName(const std::string& name, std::string& index, std::string& title) {
   static const std::regex re(R"(^\s*([A-Za-z]\d?)\s*[.\-:–—]\s*(.+)$)");
   std::smatch m;

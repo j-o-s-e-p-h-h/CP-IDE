@@ -1,6 +1,8 @@
 #include "app.hpp"
 #include <algorithm>
 #include <random>
+#include <regex>
+#include <set>
 #include "cf_api.hpp"
 #include "companion.hpp"
 #ifdef _WIN32
@@ -147,6 +149,7 @@ json App::problemJson(const Problem& p) {
           {"interactive", p.interactive},
           {"statementHtml", p.statementHtml},
           {"statementExact", p.statementExact},
+          {"statementSamples", p.statementSamples},
           {"statementVersion", p.statementVersion},
           {"tests", tests},
           {"lang", p.lang},
@@ -168,6 +171,7 @@ json App::sessionJson() {
   json probs = json::array();
   for (auto& p : contest_.problems) probs.push_back(problemJson(p));
   return {{"name", contest_.name}, {"dir", contest_.dir},       {"kind", contest_.kind},
+          {"startSec", contest_.startSec}, {"durationSec", contest_.durationSec},
           {"active", contest_.activeProblem}, {"problems", probs}, {"path", util::pstr(storage_.contestDir(contest_))}};
 }
 
@@ -282,16 +286,27 @@ void App::fetchStatementAsync(std::string contestDir, std::string problemDir, st
     if (si.ok) {
       p->statementHtml = si.html;
       p->statementExact = si.exact;
-      p->statementVersion = 2;
+      p->statementSamples = si.selfSamples;
+      p->statementVersion = 7;
       if (p->rating == 0 && si.rating) p->rating = si.rating;
       if (si.timeLimitSec > 0 && p->timeLimitSec == 1.0) p->timeLimitSec = si.timeLimitSec;
       if (si.memoryMB > 0 && p->memoryMB == 256) p->memoryMB = si.memoryMB;
       // Companion/API imports already carry a good title; URL imports take the page's.
       if (!si.title.empty() && (p->title.empty() || p->group.empty() || util::startsWith(p->title, "Problem "))) p->title = si.title;
-      bool onlyBlankTests = std::all_of(p->tests.begin(), p->tests.end(), [](const TestCase& t) { return util::trim(t.in).empty() && util::trim(t.out).empty(); });
-      if (onlyBlankTests && !si.samples.empty()) {
-        p->tests = si.samples;
-        storage_.saveTests(contest_, *p);
+      // The judge owns the sample tests, so refreshing a statement refreshes them
+      // too (this is how a problem picks up per-case splitting); cases the user
+      // added are theirs and are kept after the samples.
+      if (!si.samples.empty()) {
+        std::vector<TestCase> merged = si.samples;
+        for (auto& t : p->tests)
+          if (t.custom) merged.push_back(t);
+        bool changed = merged.size() != p->tests.size();
+        for (size_t i = 0; !changed && i < merged.size(); ++i)
+          changed = merged[i].in != p->tests[i].in || merged[i].out != p->tests[i].out || merged[i].pre != p->tests[i].pre;
+        if (changed) {
+          p->tests = merged;
+          storage_.saveTests(contest_, *p);
+        }
       }
       storage_.saveProblemMeta(contest_, *p);
       emit({{"type", "problem"}, {"problem", problemJson(*p)}});
@@ -412,6 +427,31 @@ std::string App::rpc(const std::string& name, const json& a) {
       }
       return json({{"ok", ok}, {"contests", contestsJson()}, {"session", sessionJson()}}).dump();
     }
+    if (name == "deleteProblem") {
+      std::string id = a.value("id", "");
+      bool ok = false;
+      std::string error;
+      {
+        std::lock_guard lk(mu_);
+        auto* p = problemById(id);
+        if (!p) error = "No such problem";
+        else {
+          // It may be the one compiling, stress-testing or under the debugger.
+          runCancel_ = true;
+          stress_.stop();
+          debugger_.stop();
+          std::string dir = p->dir;
+          ok = storage_.deleteProblem(contest_, dir);
+          if (ok) {
+            std::erase_if(contest_.problems, [&](const Problem& q) { return q.dir == dir; });
+            if (contest_.activeProblem == id)
+              contest_.activeProblem = contest_.problems.empty() ? "" : contest_.problems.front().id;
+            storage_.saveContestMeta(contest_);
+          } else error = "Could not remove the folder";
+        }
+      }
+      return json({{"ok", ok}, {"error", error}, {"session", sessionJson()}, {"contests", contestsJson()}}).dump();
+    }
     if (name == "newSession") return rpcNewSession(a).dump();
     if (name == "setActive") {
       std::lock_guard lk(mu_);
@@ -449,6 +489,10 @@ std::string App::rpc(const std::string& name, const json& a) {
       runCancel_ = true;
       return "{}";
     }
+    if (name == "saveTemplate") {
+      storage_.saveTemplate(a.value("lang", ""), a.value("code", ""));
+      return json({{"ok", true}, {"templates", storage_.loadTemplates()}}).dump();
+    }
     if (name == "submit") return rpcSubmit(a).dump();
     if (name == "stressStart") return rpcStress(a, true).dump();
     if (name == "stressStop") return rpcStress(a, false).dump();
@@ -478,6 +522,16 @@ std::string App::rpc(const std::string& name, const json& a) {
     if (name == "openFolder") {
       std::lock_guard lk(mu_);
       fs::path p = storage_.root();
+      // A contest folder can be opened by name even when it is not the open one.
+      std::string cdir = a.value("dir", "");
+      if (!cdir.empty() && !util::contains(cdir, "..") && !util::contains(cdir, "/") && !util::contains(cdir, "\\")) {
+        std::error_code ec;
+        auto cp = storage_.contestsDir() / util::upath(cdir);
+        if (fs::exists(cp / "contest.json", ec)) {
+          openInBrowser(util::pstr(cp));
+          return "{}";
+        }
+      }
       if (hasContest_ && !a.value("root", false)) {
         p = storage_.contestDir(contest_);
         if (auto* pr = problemById(a.value("id", ""))) p = storage_.problemDir(contest_, *pr);
@@ -526,19 +580,27 @@ json App::rpcInit() {
           {"contests", contestsJson()},
           {"session", sessionJson()},
           {"history", historyJson()},
-          {"templates", {{"python", PY_TEMPLATE}, {"cpp", CPP_TEMPLATE}, {"java", ""}, {"js", ""}}},
+          {"templates", storage_.loadTemplates()},
+          {"starters", {{"python", PY_STARTER}, {"cpp", CPP_STARTER}, {"java", JAVA_STARTER}, {"js", JS_STARTER}}},
           {"port", 10045}};
 }
 
 json App::rpcNewSession(const json& a) {
   std::string name = a.value("name", "");
   std::string mode = a.value("mode", "blank");
-  if (util::trim(name).empty()) name = mode == "random" ? "Random practice" : "Practice Session";
+  // An unnamed session is named after what it is: the rating band for a random pull,
+  // otherwise the date (Storage::createContest supplies that for an empty name).
+  if (util::trim(name).empty() && mode == "random") {
+    int rlo = a.value("ratingMin", 1200), rhi = a.value("ratingMax", 1500);
+    if (rhi < rlo) std::swap(rlo, rhi);
+    name = "Random " + std::to_string(rlo) + "–" + std::to_string(rhi);
+  }
   if (mode == "blank") {
     Contest c = storage_.createContest(name, "session");
+    std::string made = c.name;  // createContest fills in the dated name when none was given
     switchToContest(std::move(c));
     return {{"ok", true}, {"session", sessionJson()}, {"contests", contestsJson()},
-            {"toast", toast("\"" + name + "\" created — add problems via Companion or a URL", "var(--ok)")}};
+            {"toast", toast("\"" + made + "\" created — add problems via Companion or a URL", "var(--ok)")}};
   }
   if (sessionBusy_) return {{"ok", false}, {"error", "Still creating the previous session"}};
   int lo = a.value("ratingMin", 1200), hi = a.value("ratingMax", 1500);
@@ -585,7 +647,8 @@ json App::rpcNewSession(const json& a) {
           if (si.ok) {
             p.statementHtml = si.html;
             p.statementExact = si.exact;
-            p.statementVersion = 2;
+            p.statementSamples = si.selfSamples;
+            p.statementVersion = 7;
             if (si.timeLimitSec > 0) p.timeLimitSec = si.timeLimitSec;
             if (si.memoryMB > 0) p.memoryMB = si.memoryMB;
             p.tests = si.samples;
@@ -603,7 +666,8 @@ json App::rpcNewSession(const json& a) {
       if (si.ok) {
         p.statementHtml = si.html;
             p.statementExact = si.exact;
-            p.statementVersion = 2;
+            p.statementSamples = si.selfSamples;
+            p.statementVersion = 7;
         if (!si.title.empty()) p.title = si.title;
         if (!si.index.empty()) p.id = si.index;
         p.rating = si.rating;
@@ -624,6 +688,7 @@ json App::rpcNewSession(const json& a) {
       return;
     }
     Contest c = storage_.createContest(name, "session");
+    std::string made = c.name;  // the dated default when the box was left blank
     for (auto& p : probs) {
       std::lock_guard lk(mu_);
       p.dir = util::safeName(p.id);
@@ -635,18 +700,161 @@ json App::rpcNewSession(const json& a) {
     switchToContest(std::move(c));
     emit({{"type", "busy"}, {"message", ""}});
     emit({{"type", "session"}, {"session", sessionJson()}, {"contests", contestsJson()},
-          {"toast", toast("\"" + name + "\" created with " + std::to_string(probs.size()) + " problem" + (probs.size() == 1 ? "" : "s"), "var(--ok)")}});
+          {"toast", toast("\"" + made + "\" created with " + std::to_string(probs.size()) + " problem" + (probs.size() == 1 ? "" : "s"), "var(--ok)")}});
+  });
+  return {{"ok", true}, {"async", true}};
+}
+
+// A link to a whole contest (live, virtual or finished) brings in every problem at
+// once, so joining a round does not require the browser extension.
+json App::rpcImportContest(const std::string& url, const std::string& judge, const std::string& contestId) {
+  if (sessionBusy_) return {{"ok", false}, {"error", "Still importing the previous contest"}};
+  emit({{"type", "busy"}, {"message", "Fetching the contest…"}});
+  sessionBusy_ = true;
+  spawn([this, url, judge, contestId] {
+    struct Done {
+      App* app;
+      std::atomic<bool>& b;
+      ~Done() {
+        b = false;
+        if (std::uncaught_exceptions()) {
+          app->emit({{"type", "busy"}, {"message", ""}});
+          app->emit({{"type", "toast"}, {"toast", app->toast("Could not import that contest", "var(--bad)")}});
+        }
+      }
+    } done{this, sessionBusy_};
+    HttpClient http;
+    std::vector<Problem> probs;
+    std::string name, error;
+    int64_t startSec = 0, durationSec = 0;
+
+    if (judge == "codeforces") {
+      // The API's contest.standings refuses paging for anonymous callers and the
+      // unparameterised form returns the entire standings table, so the contest
+      // page is both lighter and the only place the live countdown is published.
+      int status = 0;
+      std::string page;
+      if (!fetchPage(http, "https://codeforces.com/contest/" + contestId, status, page) || status != 200) {
+        error = status ? "Codeforces returned HTTP " + std::to_string(status) : "Could not reach Codeforces";
+      } else {
+        static const std::regex title(R"(<title>([^<]*)</title>)", std::regex::icase);
+        std::smatch tm;
+        if (std::regex_search(page, tm, title)) {
+          name = util::trim(util::htmlUnescape(tm[1]));
+          if (util::endsWith(name, " - Codeforces")) name = util::trim(name.substr(0, name.size() - 13));
+          if (util::startsWith(name, "Dashboard - ")) name = util::trim(name.substr(12));
+        }
+        if (name.empty()) name = "Codeforces contest " + contestId;
+        // Problem rows: <td class="id"><a href="/contest/2009/problem/A">A</a>
+        std::regex row("href=\"/contest/" + contestId + "/problem/([A-Za-z][0-9]?)\"");
+        std::set<std::string> seen;
+        for (auto it = std::sregex_iterator(page.begin(), page.end(), row); it != std::sregex_iterator(); ++it) {
+          std::string idx = (*it)[1];
+          if (!seen.insert(idx).second) continue;
+          Problem p;
+          p.id = idx;
+          p.judge = "codeforces";
+          p.cfContestId = contestId;
+          p.cfIndex = idx;
+          p.group = "Codeforces";
+          p.url = "https://codeforces.com/contest/" + contestId + "/problem/" + idx;
+          probs.push_back(p);
+        }
+        if (probs.empty()) error = "No problems on that contest page — is the round open yet?";
+        // A running or virtual round publishes the time left as HH:MM:SS.
+        static const std::regex cd(R"(class="countdown"[^>]*>\s*(?:<[^>]+>\s*)*(\d+):(\d\d):(\d\d))");
+        std::smatch cm;
+        if (std::regex_search(page, cm, cd)) {
+          int64_t left = atoll(cm[1].str().c_str()) * 3600 + atoll(cm[2].str().c_str()) * 60 + atoll(cm[3].str().c_str());
+          if (left > 0) {
+            startSec = util::nowSec();
+            durationSec = left;  // counts down from now, which is what virtual rounds need too
+          }
+        }
+      }
+    } else {  // AtCoder: the task list page carries every problem link
+      int status = 0;
+      std::string body;
+      if (!fetchPage(http, "https://atcoder.jp/contests/" + contestId + "/tasks", status, body) || status != 200) {
+        error = status ? "AtCoder returned HTTP " + std::to_string(status) : "Could not reach AtCoder";
+      } else {
+        auto& res_body = body;
+        static const std::regex title(R"(<title>([^<]*)</title>)", std::regex::icase);
+        std::smatch tm;
+        if (std::regex_search(res_body, tm, title)) {
+          name = util::trim(util::htmlUnescape(tm[1]));
+          auto dash = name.rfind(" - ");
+          if (dash != std::string::npos) name = util::trim(name.substr(dash + 3));
+        }
+        if (name.empty()) name = contestId;
+        std::regex link("href=\"/contests/" + contestId + "/tasks/([A-Za-z0-9_\\-]+)\"");
+        std::set<std::string> seen;
+        for (auto it = std::sregex_iterator(res_body.begin(), res_body.end(), link); it != std::sregex_iterator(); ++it) {
+          std::string task = (*it)[1];
+          if (!seen.insert(task).second) continue;
+          Problem p;
+          p.judge = "atcoder";
+          p.url = "https://atcoder.jp/contests/" + contestId + "/tasks/" + task;
+          p.id = task;
+          probs.push_back(p);
+        }
+        if (probs.empty()) error = "No tasks found on that contest page (is it public yet?)";
+      }
+    }
+    if (!error.empty()) {
+      emit({{"type", "busy"}, {"message", ""}});
+      emit({{"type", "toast"}, {"toast", toast(error, "var(--bad)")}});
+      return;
+    }
+
+    // Statements are fetched per problem; a missing one is not fatal, the tab still
+    // appears and can be retried from the refresh chip.
+    for (auto& p : probs) {
+      auto si = fetchStatement(http, p.url, p.judge);
+      if (!si.ok) continue;
+      if (!si.title.empty()) p.title = si.title;
+      if (!si.index.empty()) p.id = si.index;
+      if (si.rating) p.rating = si.rating;
+      if (si.timeLimitSec > 0) p.timeLimitSec = si.timeLimitSec;
+      if (si.memoryMB > 0) p.memoryMB = si.memoryMB;
+      p.statementHtml = si.html;
+      p.statementExact = si.exact;
+      p.statementSamples = si.selfSamples;
+      p.statementVersion = 7;
+      p.tests = si.samples;
+    }
+
+    Contest c = storage_.createContest(name, "contest");
+    c.startSec = startSec;
+    c.durationSec = durationSec;
+    std::string made = c.name;
+    for (auto& p : probs) {
+      std::lock_guard lk(mu_);
+      p.dir = util::safeName(p.id);
+      p.lang = defaultLang();
+      storage_.addProblem(c, p);
+    }
+    if (!c.problems.empty()) c.activeProblem = c.problems.front().id;
+    storage_.saveContestMeta(c);
+    switchToContest(std::move(c));
+    emit({{"type", "busy"}, {"message", ""}});
+    emit({{"type", "session"}, {"session", sessionJson()}, {"contests", contestsJson()},
+          {"toast", toast("\"" + made + "\" — " + std::to_string(probs.size()) + " problem" + (probs.size() == 1 ? "" : "s") + " imported", "var(--ok)")}});
   });
   return {{"ok", true}, {"async", true}};
 }
 
 json App::rpcImportUrl(const json& a) {
   std::string url = util::trim(a.value("url", ""));
-  if (url.empty()) return {{"ok", false}, {"error", "Paste a problem URL first"}};
+  if (url.empty()) return {{"ok", false}, {"error", "Paste a problem or contest URL first"}};
+  {
+    std::string judge, cid;
+    if (companion::parseContestUrl(url, judge, cid)) return rpcImportContest(url, judge, cid);
+  }
   {
     std::lock_guard lk(mu_);
     if (!hasContest_) {
-      Contest c = storage_.createContest("Practice Session", "session");
+      Contest c = storage_.createContest("", "session");  // dated default name
       switchToContest(std::move(c));
     }
   }
@@ -660,7 +868,8 @@ json App::rpcImportUrl(const json& a) {
     if (si.ok) {
       p.statementHtml = si.html;
             p.statementExact = si.exact;
-            p.statementVersion = 2;
+            p.statementSamples = si.selfSamples;
+            p.statementVersion = 7;
       p.title = si.title;
       p.id = si.index;
       p.rating = si.rating;
@@ -701,11 +910,13 @@ json App::rpcRun(const json& a) {
     tl = p->timeLimitSec;
   }
   if (tests.empty()) return {{"ok", false}, {"error", "No test cases — add one first"}};
+  int only = a.value("only", -1);  // -1 = every test, otherwise just that index
+  if (only >= (int)tests.size()) only = -1;
   if (runThread_.joinable()) runThread_.join();
   running_ = true;
   runCancel_ = false;
   Toolchain tc = tc_;
-  runThread_ = std::thread([this, tc, id, lang, dir, tests, tl] {
+  runThread_ = std::thread([this, tc, id, lang, dir, tests, tl, only] {
     // An exception here (folder deleted mid-run, odd filesystem state) must end as a
     // failed run, not as std::terminate of the whole IDE.
     struct Done {
@@ -729,19 +940,26 @@ json App::rpcRun(const json& a) {
       }
       emit({{"type", "compile"}, {"id", id}, {"state", "done"}, {"ms", cr.ms}});
     }
-    int passed = 0, maxMs = 0;
+    // "graded" counts only the tests that have an expected output; a scratch input
+    // with an empty Expected box comes back as "out" and is neither pass nor fail.
+    int passed = 0, graded = 0, scratch = 0, maxMs = 0;
     bool cancelled = false;
     for (size_t i = 0; i < tests.size(); ++i) {
+      if (only >= 0 && (int)i != only) continue;
       if (runCancel_) { cancelled = true; break; }
       emit({{"type", "testStatus"}, {"id", id}, {"index", (int)i}, {"status", "running"}});
-      auto v = runTest(tc, lang, dir, tests[i], tl, &runCancel_);
+      auto v = runTest(tc, lang, dir, tests[i], tl, &runCancel_, /*scratchIfNoExpected=*/true);
       if (runCancel_) { cancelled = true; break; }
-      if (v.status == "pass") passed++;
+      if (v.status == "out") scratch++;
+      else {
+        graded++;
+        if (v.status == "pass") passed++;
+      }
       maxMs = std::max(maxMs, v.ms);
       emit({{"type", "testStatus"}, {"id", id}, {"index", (int)i}, {"status", v.status}, {"got", v.got}, {"ms", v.ms}});
     }
-    emit({{"type", "runDone"}, {"id", id}, {"ok", !cancelled && passed == (int)tests.size()}, {"passed", passed}, {"total", (int)tests.size()},
-          {"ms", maxMs}, {"totalMs", (int)(util::nowMs() - t0)}, {"cancelled", cancelled}});
+    emit({{"type", "runDone"}, {"id", id}, {"ok", !cancelled && graded > 0 && passed == graded}, {"passed", passed}, {"total", graded},
+          {"scratch", scratch}, {"only", only}, {"ms", maxMs}, {"totalMs", (int)(util::nowMs() - t0)}, {"cancelled", cancelled}});
     running_ = false;
   });
   return {{"ok", true}};
@@ -887,7 +1105,7 @@ json App::rpcDebugStart(const json& a) {
       for (auto& b : a["bps"]) if (b.is_number()) bps.push_back(b.get<int>());
     dir = storage_.problemDir(contest_, *p);
     int ti = a.value("testIndex", 0);
-    if (ti >= 0 && ti < (int)p->tests.size()) stdinData = p->tests[ti].in;
+    if (ti >= 0 && ti < (int)p->tests.size()) stdinData = p->tests[ti].pre + p->tests[ti].in;
   }
   std::string err;
   bool ok = debugger_.start(tc_, lang, dir, toolsDir_, bps, stdinData,
