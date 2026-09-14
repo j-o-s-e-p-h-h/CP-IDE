@@ -78,67 +78,6 @@ target_include_directories(cp-ide PRIVATE src)
 target_compile_options(cp-ide PRIVATE -Wall -Wextra -Wno-unused-parameter -Wno-cast-function-type)
 set_target_properties(cp-ide PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 
-# ---- cp-ide-wx: native front end on the same core ---------------------------
-# A second executable, not a replacement: it links the same storage / runner /
-# judge / statement sources and only swaps the UI for wxWidgets + Scintilla.
-# Built when wxWidgets is present, skipped otherwise, so the normal build of
-# cp-ide never depends on it.
-#   Windows (MSYS2): pacman -S mingw-w64-ucrt-x86_64-wxwidgets3.2-msw
-#   Debian/Ubuntu:   sudo apt install libwxgtk3.2-dev
-#   macOS:           brew install wxwidgets
-set(CP_IDE_CORE_SOURCES
-  src/storage.cpp
-  src/runner.cpp
-  src/tools_detect.cpp
-  src/tools_detect_posix.cpp
-  src/companion.cpp
-  src/statement.cpp
-  src/cf_api.cpp
-  src/http_client.cpp
-)
-# CMake's FindwxWidgets uses an MSVC-style search on Windows and cannot read an
-# MSYS2 install, so ask wx-config instead — every platform's wx ships it.
-find_program(WX_CONFIG NAMES wx-config-3.2 wx-config)
-set(WX_OK FALSE)
-if(WX_CONFIG)
-  if(WIN32)
-    find_program(SH_EXE NAMES sh HINTS "C:/msys64/usr/bin" "$ENV{MSYSTEM_PREFIX}/../usr/bin")
-    set(WX_CMD ${SH_EXE} ${WX_CONFIG})   # wx-config is a shell script
-  else()
-    set(WX_CMD ${WX_CONFIG})
-  endif()
-  execute_process(COMMAND ${WX_CMD} --cxxflags RESULT_VARIABLE wx_rc
-                  OUTPUT_VARIABLE WX_CXXFLAGS OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
-  execute_process(COMMAND ${WX_CMD} --libs std,stc
-                  OUTPUT_VARIABLE WX_LIBS OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
-  if(wx_rc EQUAL 0 AND WX_CXXFLAGS)
-    separate_arguments(WX_CXXFLAGS NATIVE_COMMAND "${WX_CXXFLAGS}")
-    separate_arguments(WX_LIBS NATIVE_COMMAND "${WX_LIBS}")
-    set(WX_OK TRUE)
-  endif()
-endif()
-if(WX_OK)
-  add_executable(cp-ide-wx WIN32 MACOSX_BUNDLE src/wx/wx_main.cpp ${CP_IDE_CORE_SOURCES})
-  target_include_directories(cp-ide-wx PRIVATE src "${CMAKE_CURRENT_SOURCE_DIR}/third_party/webview/core/include")
-  if(WIN32)
-    target_include_directories(cp-ide-wx PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/third_party/webview2/include")
-  endif()
-  target_compile_options(cp-ide-wx PRIVATE ${WX_CXXFLAGS})
-  target_link_libraries(cp-ide-wx PRIVATE ${WX_LIBS} nlohmann_json)
-  target_compile_definitions(cp-ide-wx PRIVATE NOMINMAX)
-  if(WIN32)
-    target_compile_definitions(cp-ide-wx PRIVATE UNICODE _UNICODE _WIN32_WINNT=0x0A00)
-    target_link_libraries(cp-ide-wx PRIVATE winhttp ws2_32 ole32 shell32 shlwapi version dwmapi)
-  else()
-    find_package(Threads REQUIRED)
-    target_link_libraries(cp-ide-wx PRIVATE Threads::Threads)
-  endif()
-  set_target_properties(cp-ide-wx PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
-  message(STATUS "wxWidgets found: building cp-ide-wx alongside cp-ide")
-else()
-  message(STATUS "wxWidgets not found: skipping the cp-ide-wx target (cp-ide is unaffected)")
-endif()
-
 # ---- runtime assets next to the exe -----------------------------------------
 # Runs on every build so edits in ui/ and tools/ are picked up without relinking.
 add_custom_target(cp_ide_assets ALL
