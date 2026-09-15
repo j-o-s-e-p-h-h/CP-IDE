@@ -19,7 +19,7 @@
 
 <p align="center"><em>Resume a contest, write the solution, press <code>Ctrl+Enter</code> to run every sample and <code>Ctrl+Shift+Enter</code> to submit. The Codeforces verdict comes back in the same window; the recording is a real submission.</em></p>
 
-CP IDE is a C++ desktop app for people who do timed programming contests. A problem
+CP IDE is a C++ desktop app for people who do timed programming contests and are mabye annoyed and tired of the hassle of copying and pasting from ide to browser. A problem
 arrives from the [Competitive Companion](https://github.com/jmerle/competitive-companion)
 browser extension or a pasted URL, and the app creates the folders, writes the sample
 tests to disk, renders the statement next to your editor, and gives you one key to compile
@@ -52,14 +52,6 @@ To compile it instead, [build it yourself](#build-it-yourself) in three commands
 ### "Windows protected your PC"
 
 This is expected. Click **More info**, then **Run anyway**.
-
-SmartScreen shows that warning for any installer without a code-signing certificate, which
-is also why the publisher reads *Unknown*. A certificate costs a few hundred dollars a
-year, and an ordinary one still triggers the warning until enough people have downloaded
-the file to build its reputation, so this project does not have one. macOS treats the
-`.dmg` the same way: right-click the app and pick **Open** the first time.
-
-You can check you got the real file: every release lists a SHA-256 next to each asset.
 
 On first launch the app checks for Python, g++, Java and Node, and offers a one-click
 install for whatever is missing. You only need the languages you actually use.
@@ -188,8 +180,6 @@ It is MIT licensed and free, and it will stay that way. If it saved you time in 
 starring the repo helps more than anything else, since that is how other people doing
 contests find it ;)).
 
-Opening an issue when something annoys you helps even more. Most of what this app does
-well started with somebody asking "why does it do *that*".
 
 ## License
 
