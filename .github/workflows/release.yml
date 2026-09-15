@@ -101,3 +101,19 @@ jobs:
         with:
           files: dist/**/*
           generate_release_notes: true
+          # Six files with names like "Darwin" tell a visitor nothing. The
+          # generated changelog is appended below this.
+          body: |
+            ### Which file do I want?
+
+            | You are on | Download |
+            | --- | --- |
+            | **Windows** | `CP-IDE-Setup-*.exe` — installs, adds shortcuts, fetches WebView2 if needed |
+            | **Debian or Ubuntu** | `cp-ide_*_amd64.deb` — `sudo apt install ./cp-ide_*_amd64.deb` |
+            | **Any other Linux** | `cp-ide-*-Linux.tar.gz` — unpack and run `bin/cp-ide` |
+            | **macOS** (Apple Silicon) | `cp-ide-*-Darwin.dmg` — unsigned, so right-click the app and pick **Open** the first time |
+
+            *Source code* is only for building it yourself — see the
+            [README](https://github.com/j-o-s-e-p-h-h/Competitive-programming-IDE-project#build-it-yourself).
+
+            ---
