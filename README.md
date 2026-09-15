@@ -42,15 +42,15 @@ you can open with anything else.
 
 ## Install it
 
-**Windows has an installer. Linux and macOS are build-from-source today** — see
-[Build it yourself](#build-it-yourself), it is three commands on each.
+Every platform has a download on the
+[latest release](https://github.com/j-o-s-e-p-h-h/Competitive-programming-IDE-project/releases/latest).
+Prefer to compile it? [Build it yourself](#build-it-yourself) is three commands.
 
-**Windows** — grab `CP-IDE-Setup-0.1.0.exe` from the
-[latest release](https://github.com/j-o-s-e-p-h-h/Competitive-programming-IDE-project/releases/latest)
-and run it. It is 4.1 MB, adds Start Menu and desktop shortcuts, and pulls the Microsoft
-Edge WebView2 runtime if the machine lacks it (Windows 11 already has it). To build the
-installer yourself instead: `cmake --build build --target installer`, which needs
-[Inno Setup 6](https://jrsoftware.org/isinfo.php).
+| Platform | Download | Notes |
+| --- | --- | --- |
+| Windows | `CP-IDE-Setup-0.1.0.exe` | 4.1 MB. Start Menu and desktop shortcuts; pulls the Edge WebView2 runtime if the machine lacks it (Windows 11 already has it). |
+| Linux | `cp-ide_0.1.0_amd64.deb` | `sudo apt install ./cp-ide_0.1.0_amd64.deb`. A `.tar.gz` is there too if you are not on Debian or Ubuntu. |
+| macOS | `CP-IDE-0.1.0-Darwin.dmg` | Apple Silicon. Unsigned, so the first launch needs right-click → **Open**. |
 
 On first launch the app checks for Python, g++, Java and Node, and offers a one-click
 install for whatever is missing. You do not need all four — only the languages you use.
@@ -159,8 +159,8 @@ If you are adding a judge, `src/judges/drivers.cpp` is the place; each site is o
 
 ## Known issues
 
-* **Only Windows has an installer.** Linux and macOS build from the same sources and run fine, but there is no `.deb`, AppImage or signed `.dmg` yet — you build it yourself.
-* **Linux and macOS get far less testing than Windows.** Windows is what gets used daily. Reports from the other two are especially welcome.
+* **The macOS build is Apple Silicon only and unsigned.** Gatekeeper blocks the first launch until you right-click → Open. Signing and notarizing needs a paid Apple Developer account; an Intel build would need a second CI job.
+* **Linux and macOS get far less testing than Windows.** They are built and packaged on every release, but Windows is what gets used daily. Reports from the other two are especially welcome.
 * **The C++ debugger needs gdb**, which macOS does not ship. The Python debugger works everywhere.
 * **USACO verdict parsing is best effort**, and USACO shows no submit form at all once a contest closes — the app now tells you which of those happened rather than failing silently.
 * **CodeChef and HackerRank import but do not auto-submit.** Statements, limits and samples come in fine; Submit copies your code to the clipboard and opens the site's submit page, because both render their submit forms in JavaScript that changes often enough not to be worth pinning to.
