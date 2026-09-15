@@ -380,6 +380,98 @@ StatementInfo parseAtCoder(const std::string& doc, const std::string& url) {
   return si;
 }
 
+// USACO writes its maths with MathJax's plain $…$ and $$…$$. Those delimiters are
+// far too easy to hit by accident to enable globally — a Codeforces statement that
+// mentions "$5" would start rendering as maths — so they are rewritten here into
+// the \(…\) and \[…\] forms the page's KaTeX already accepts.
+std::string dollarMath(const std::string& s) {
+  std::string out;
+  out.reserve(s.size() + 128);
+  size_t i = 0;
+  while (i < s.size()) {
+    if (s[i] == '<') {
+      // Step over a tag, or a whole <pre> block: KaTeX does not run inside one,
+      // and a sample's text must survive exactly as the judge printed it.
+      if (s.compare(i, 4, "<pre") == 0) {
+        size_t end = s.find("</pre>", i);
+        if (end == std::string::npos) { out += s.substr(i); break; }
+        out += s.substr(i, end + 6 - i);
+        i = end + 6;
+        continue;
+      }
+      size_t close = s.find('>', i);
+      if (close == std::string::npos) { out += s.substr(i); break; }
+      out += s.substr(i, close + 1 - i);
+      i = close + 1;
+      continue;
+    }
+    if (s[i] == '$') {
+      bool display = s.compare(i, 2, "$$") == 0;
+      size_t open = i + (display ? 2 : 1);
+      size_t end = s.find(display ? "$$" : "$", open);
+      // A lone or empty $, or one whose partner sits past some markup, is a
+      // literal dollar sign — leave it alone rather than swallowing the tags.
+      if (end != std::string::npos && end > open && s.find('<', open) > end) {
+        out += display ? "\\[" : "\\(";
+        out += s.substr(open, end - open);
+        out += display ? "\\]" : "\\)";
+        i = end + (display ? 2 : 1);
+        continue;
+      }
+    }
+    out += s[i++];
+  }
+  return out;
+}
+
+StatementInfo parseUsaco(const std::string& doc, const std::string& url) {
+  StatementInfo si;
+  std::string stmt = html::extractTag(doc, "id=\"probtext-text\"", "span");
+  if (stmt.empty()) {
+    si.error = "No problem text found on the page";
+    return si;
+  }
+  // The page carries two <h2>s: the contest name, then this problem's title.
+  {
+    static const std::regex re(R"(<h2[^>]*>([\s\S]*?)</h2>)");
+    std::vector<std::string> heads;
+    for (auto it = std::sregex_iterator(doc.begin(), doc.end(), re); it != std::sregex_iterator(); ++it)
+      heads.push_back(util::trim(html::stripTags((*it)[1])));
+    if (heads.size() >= 2) si.title = heads[1];
+    else if (!heads.empty()) si.title = heads[0];
+  }
+  // Samples come as alternating <pre class='in'> / <pre class='out'> blocks.
+  {
+    static const std::regex re(R"(<pre class=['"](in|out)['"]>([\s\S]*?)</pre>)");
+    TestCase cur;
+    bool haveIn = false;
+    for (auto it = std::sregex_iterator(stmt.begin(), stmt.end(), re); it != std::sregex_iterator(); ++it) {
+      std::string body = html::preToText((*it)[2]);
+      if ((*it)[1] == "in") {
+        if (haveIn) si.samples.push_back(cur);   // an input with no output of its own
+        cur = TestCase{};
+        cur.in = body;
+        haveIn = true;
+      } else if (haveIn) {
+        cur.out = body;
+        si.samples.push_back(cur);
+        cur = TestCase{};
+        haveIn = false;
+      }
+    }
+    if (haveIn) si.samples.push_back(cur);
+  }
+  // USACO's section headings are <h4>; give them the look every other judge gets.
+  {
+    static const std::regex re(R"(<h4[^>]*>([\s\S]*?)</h4>)");
+    stmt = std::regex_replace(stmt, re, "<div class=\"section-title\">$1</div>");
+  }
+  si.selfSamples = true;   // SAMPLE INPUT / SAMPLE OUTPUT are part of the text
+  si.html = dollarMath(html::absolutizeUrls(html::removeScripts(stmt), url));
+  si.ok = true;
+  return si;
+}
+
 StatementInfo parseGeneric(const std::string& doc, const std::string& url) {
   StatementInfo si;
   static const std::regex re(R"(<title>([^<]*)</title>)", std::regex::icase);
@@ -489,5 +581,6 @@ StatementInfo fetchStatement(HttpClient& http, const std::string& url, const std
   }
   if (judge == "codeforces") return parseCodeforces(body, url);
   if (judge == "atcoder") return parseAtCoder(body, url);
+  if (judge == "usaco") return parseUsaco(body, url);
   return parseGeneric(body, url);
 }
