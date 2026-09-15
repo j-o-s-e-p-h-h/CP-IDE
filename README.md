@@ -45,10 +45,12 @@ you can open with anything else.
 **Windows has an installer. Linux and macOS are build-from-source today** — see
 [Build it yourself](#build-it-yourself), it is three commands on each.
 
-**Windows** — build `CP-IDE-Setup-<version>.exe` with
-`cmake --build build --target installer` ([Inno Setup 6](https://jrsoftware.org/isinfo.php)
-required) and run it. It is about 4 MB, adds Start Menu and desktop shortcuts, and pulls
-the Microsoft Edge WebView2 runtime if the machine lacks it (Windows 11 already has it).
+**Windows** — grab `CP-IDE-Setup-0.1.0.exe` from the
+[latest release](https://github.com/j-o-s-e-p-h-h/Competitive-programming-IDE-project/releases/latest)
+and run it. It is 4.1 MB, adds Start Menu and desktop shortcuts, and pulls the Microsoft
+Edge WebView2 runtime if the machine lacks it (Windows 11 already has it). To build the
+installer yourself instead: `cmake --build build --target installer`, which needs
+[Inno Setup 6](https://jrsoftware.org/isinfo.php).
 
 On first launch the app checks for Python, g++, Java and Node, and offers a one-click
 install for whatever is missing. You do not need all four — only the languages you use.
