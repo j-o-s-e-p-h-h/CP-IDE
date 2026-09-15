@@ -22,7 +22,8 @@ SIZES = (256, 128, 96, 64, 48, 40, 32, 24, 20, 16)
 MARK = (255, 255, 255)         # the monogram
 CONTOUR = (24, 24, 24)         # keyline behind it so white survives a light background
 CONTOUR_ALPHA = 205            # 0 disables the keyline entirely
-CONTOUR_WIDTH = 0.05           # keyline thickness as a fraction of the box (~1 px at 20 px)
+CONTOUR_WIDTH = 0.05           # keyline thickness as a fraction of the box
+MIN_KEYLINE_PX = 2.0           # ...but never thinner than this in the finished frame
 MARK_FILL = 0.88               # how much of the box the monogram spans
 BIG = 1024                     # master resolution everything is rendered from
 
@@ -41,29 +42,38 @@ mask = mask.point(lambda a: max(0, min(255, (a - 128) * 8 + 128)))
 mark = Image.new("RGBA", mask.size, MARK + (0,))
 mark.putalpha(mask)
 
-# 2. The master icon: the mark, over a soft dark contour spread from its own shape.
-master = Image.new("RGBA", (BIG, BIG), (0, 0, 0, 0))
+# 2. One master per output size. The keyline is what keeps a white mark readable on
+#    a light background, and a single master shared by every size cannot provide it:
+#    a 5% spread is 12 px at 256 but 0.8 px at 16, so it washes out in the downscale
+#    and the small frames collapse into a dark smudge on white. Each size therefore
+#    gets its own render, with the spread widened as needed so the finished keyline
+#    is never thinner than MIN_KEYLINE_PX.
 at = ((BIG - mark.size[0]) // 2, (BIG - mark.size[1]) // 2)
-if CONTOUR_ALPHA > 0:
-    # Grow the silhouette by blurring and re-thresholding: the spread has to be a
-    # fraction of the icon, not a fixed pixel count, or it vanishes once scaled down.
-    spread = BIG * CONTOUR_WIDTH
-    halo = Image.new("L", (BIG, BIG), 0)
-    halo.paste(mask, at)
-    halo = halo.filter(ImageFilter.GaussianBlur(spread / 2))
-    halo = halo.point(lambda v: 255 if v > 26 else int(v * 9))
-    halo = halo.filter(ImageFilter.GaussianBlur(BIG / 400))
-    halo = halo.point(lambda v: int(v / 255 * CONTOUR_ALPHA))
-    shade = Image.new("RGBA", (BIG, BIG), CONTOUR + (0,))
-    shade.putalpha(halo)
-    master.alpha_composite(shade)
-master.alpha_composite(mark, at)
 
-# 3. One LANCZOS step per size. Below 32 px the antialiased edge of the tile turns
-#    into a pale halo, so the alpha is pushed back towards solid.
+
+def master_for(size):
+    scale = BIG / size                       # master pixels per finished pixel
+    spread = max(BIG * CONTOUR_WIDTH, MIN_KEYLINE_PX * scale)
+    img = Image.new("RGBA", (BIG, BIG), (0, 0, 0, 0))
+    if CONTOUR_ALPHA > 0:
+        halo = Image.new("L", (BIG, BIG), 0)
+        halo.paste(mask, at)
+        halo = halo.filter(ImageFilter.GaussianBlur(spread / 2))
+        halo = halo.point(lambda v: 255 if v > 26 else int(v * 9))
+        halo = halo.filter(ImageFilter.GaussianBlur(BIG / 400))
+        halo = halo.point(lambda v: int(v / 255 * CONTOUR_ALPHA))
+        shade = Image.new("RGBA", (BIG, BIG), CONTOUR + (0,))
+        shade.putalpha(halo)
+        img.alpha_composite(shade)
+    img.alpha_composite(mark, at)
+    return img
+
+
+# 3. One LANCZOS step per size. Below 32 px the antialiased edge turns into a pale
+#    halo, so the alpha is pushed back towards solid.
 frames = []
 for size in SIZES:
-    img = master.resize((size, size), Image.LANCZOS)
+    img = master_for(size).resize((size, size), Image.LANCZOS)
     if size <= 24:
         a = img.getchannel("A").point(lambda v: 0 if v < 40 else min(255, int(v * 1.35)))
         img.putalpha(a)
