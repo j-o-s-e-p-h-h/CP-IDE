@@ -923,7 +923,11 @@ function layoutMenuHtml() {
   </div>`;
 }
 
+// Rendered-statement cache. Keyed by contest as well as problem letter: every
+// contest has an "A", so keying on the letter alone served the statement of the
+// contest you were in before — you would sit down to solve the wrong problem.
 const stmtCache = {};
+function stmtKey(id) { return `${S.session ? S.session.dir : ''}::${id}`; }
 // Second line of defence for fetched statement HTML (the core strips scripts too):
 // drop code-bearing elements, event handlers and javascript:/data: URLs before innerHTML.
 function sanitizeHtml(html) {
@@ -950,10 +954,10 @@ function statementHtml(p, focusStyle) {
   let body = '';
   if (p.statementHtml && p.statementExact) {
     // The judge's own problem block: title, limits, samples and note come with it.
-    return `<div class="stmt cf" data-stmt="${esc(p.id)}">${stmtCache[p.id] || sanitizeHtml(p.statementHtml)}</div>`;
+    return `<div class="stmt cf" data-stmt="${esc(p.id)}">${stmtCache[stmtKey(p.id)] || sanitizeHtml(p.statementHtml)}</div>`;
   }
   if (p.statementHtml) {
-    body = `<div class="stmt" data-stmt="${esc(p.id)}">${stmtCache[p.id] || sanitizeHtml(p.statementHtml)}</div>`;
+    body = `<div class="stmt" data-stmt="${esc(p.id)}">${stmtCache[stmtKey(p.id)] || sanitizeHtml(p.statementHtml)}</div>`;
   } else {
     const err = S.stmtErrors[p.id];
     body = `<p style="margin:0 0 12px">${err ? `Statement could not be fetched (${esc(err)}).` : 'Fetching the statement…'} ${p.url ? `<a href="#" data-act="openUrl" data-arg="${esc(p.url)}">Open on ${esc(p.judge)}</a> · <a href="#" data-act="refetch">Retry</a>` : ''}</p>
@@ -1565,7 +1569,7 @@ function render() {
 function renderMath() {
   const p = prob();
   const el = $('.stmt[data-stmt]');
-  if (!el || stmtCache[p.id] || !window.renderMathInElement) return;
+  if (!el || stmtCache[stmtKey(p.id)] || !window.renderMathInElement) return;
   try {
     // Order matters: auto-render takes the first delimiter that matches at a given
     // position, so the longer ones must come first. Codeforces writes inline maths
@@ -1586,7 +1590,7 @@ function renderMath() {
       colorIsTextColor: true,
       throwOnError: false,
     });
-    stmtCache[p.id] = el.innerHTML;
+    stmtCache[stmtKey(p.id)] = el.innerHTML;
   } catch (e) { /* offline: leave raw text */ }
 }
 
@@ -1636,7 +1640,7 @@ document.addEventListener('click', (e) => {
     case 'ctxCopyUrl': { const q = problems().find((x) => x.id === arg); copyText(q ? q.url : '', 'Problem URL'); break; }
     case 'ctxFolder': rpc('openFolder', { id: arg }); break;
     case 'ctxContestFolder': rpc('openFolder', { dir: arg }); break;
-    case 'ctxRefetch': { delete S.stmtErrors[arg]; delete stmtCache[arg]; rpc('refetchStatement', { id: arg }); toast('Fetching the statement again…', 'var(--accent)'); render(); break; }
+    case 'ctxRefetch': { delete S.stmtErrors[arg]; delete stmtCache[stmtKey(arg)]; rpc('refetchStatement', { id: arg }); toast('Fetching the statement again…', 'var(--accent)'); render(); break; }
     case 'ctxSolved': toggleSolved(arg); break;
     case 'ctxDupTest': dupTest(parseInt(arg)); break;
     case 'home': e.preventDefault(); closeMenus(); S.homeOpen = true; render(); break;
@@ -1701,7 +1705,7 @@ document.addEventListener('click', (e) => {
     case 'openFolder': rpc('openFolder', arg === 'root' ? { root: true } : { id: p.id }); break;
     case 'refetch':
       e.preventDefault();
-      delete S.stmtErrors[p.id]; delete stmtCache[p.id];
+      delete S.stmtErrors[p.id]; delete stmtCache[stmtKey(p.id)];
       rpc('refetchStatement', { id: p.id });
       toast('Fetching the statement again…', 'var(--accent)');
       render();
@@ -1918,7 +1922,7 @@ window.__cp = {
           const tests = fresh.length ? fresh.concat(mine) : old.tests;
           const keep = { timeSeconds: old.timeSeconds, paused: old.paused, timerMode: old.timerMode, code: old.code, tests, bps: old.bps, notes: old.notes, lang: old.lang };
           list[i] = Object.assign({}, ev.problem, keep);
-          delete stmtCache[ev.problem.id];
+          delete stmtCache[stmtKey(ev.problem.id)];
           if (ev.problem.id === S.active) render();
         }
         break;
