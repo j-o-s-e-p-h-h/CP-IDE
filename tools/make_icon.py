@@ -19,8 +19,8 @@ import os
 from PIL import Image, ImageDraw, ImageFilter
 
 SIZES = (256, 128, 96, 64, 48, 40, 32, 24, 20, 16)
-MARK = (255, 255, 255)         # the monogram
-CONTOUR = (24, 24, 24)         # keyline behind it so white survives a light background
+MARK = (0, 0, 0)               # the monogram
+CONTOUR = (255, 255, 255)      # keyline behind it so black survives a dark background
 CONTOUR_ALPHA = 205            # 0 disables the keyline entirely
 CONTOUR_WIDTH = 0.05           # keyline thickness as a fraction of the box
 MIN_KEYLINE_PX = 2.0           # ...but never thinner than this in the finished frame
