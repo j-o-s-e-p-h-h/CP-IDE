@@ -21,7 +21,7 @@
 
 CP IDE is a C++ desktop app for people who do timed programming contests. A problem
 arrives from the [Competitive Companion](https://github.com/jmerle/competitive-companion)
-browser extension or a pasted URL, and the app does the boring part: it creates the
+browser extension or a pasted URL, and the app creates the
 folders, writes the sample tests to disk, renders the statement next to your editor, and
 gives you one key to compile and run everything. It covers:
 
@@ -33,8 +33,6 @@ gives you one key to compile and run everything. It covers:
 * Stress testing against a brute force, and a real step debugger for Python and C++
 * Keeping a per-problem timer, notes and a verdict history across every contest you have opened
 
-Nothing is paywalled, there is no account, and your solutions are plain files in a folder
-you can open with anything else.
 
 ![The CP IDE window](docs/screenshot.png)
 
