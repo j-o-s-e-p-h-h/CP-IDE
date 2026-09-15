@@ -11,7 +11,6 @@
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
 ![C++23](https://img.shields.io/badge/C%2B%2B-23-00599C)
 ![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey)
-![Judges](https://img.shields.io/badge/judges-Codeforces%20%C2%B7%20AtCoder%20%C2%B7%20CodeChef%20%C2%B7%20CSES%20%C2%B7%20USACO-f39c12)
 
 [Install](#install-it) · [Build](#build-it-yourself) · [Report a bug](#found-a-bug) · [Known issues](#known-issues) · [License](#license)
 
