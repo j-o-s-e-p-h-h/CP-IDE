@@ -9,7 +9,6 @@
 [![Release](https://img.shields.io/github/v/release/j-o-s-e-p-h-h/CP-IDE?color=2cbb5d)](https://github.com/j-o-s-e-p-h-h/CP-IDE/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/j-o-s-e-p-h-h/CP-IDE/total?color=2cbb5d)](https://github.com/j-o-s-e-p-h-h/CP-IDE/releases)
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
-![C++23](https://img.shields.io/badge/C%2B%2B-23-00599C)
 ![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey)
 
 [Install](#install-it) · [Build](#build-it-yourself) · [Report a bug](#found-a-bug) · [Known issues](#known-issues) · [License](#license)
