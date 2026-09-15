@@ -26,6 +26,10 @@ struct SiteDriver {
   std::string handleJs;      // (js) expression -> handle string or ''
   std::string submitUrl;     // page with the submit form (resolved for this request)
   std::string formSelector;  // CSS selector of the form
+  // (js) expression -> a reason string, evaluated only when formSelector matches
+  // nothing. A site that hides its form (USACO after a contest closes) can say so
+  // instead of leaving the user with a bare "submit form not found".
+  std::string noFormJs;
   std::string fillJs;        // (js) statements; `form` and `src` are in scope; must press the button
   std::string submittedUrlPart;     // URL substring reached after a successful submit
   bool pollViaApi = false;          // Codeforces: verdict from api/user.status

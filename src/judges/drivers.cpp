@@ -157,6 +157,13 @@ SiteDriver usaco(const SubmitRequest& req, const json&) {
   d.handleJs = "(function(){var m=(document.body.innerText||'').match(/user:\\s*([^\\s|]+)/i);return m?m[1]:'';})()";
   d.submitUrl = req.problem.url;
   d.formSelector = "form[enctype=\"multipart/form-data\"], form:has(input[type=\"file\"])";
+  // USACO serves the problem page without a submit form once its contest closes,
+  // and only shows one to a logged-in user. Say which of the two it is.
+  d.noFormJs =
+      "(function(){var t=document.body.innerText||'';"
+      "if(/contest has ended/i.test(t))return 'USACO has closed this contest — its page no longer offers a submit form';"
+      "if(!/\\bLogout\\b/i.test(t))return 'not signed in to USACO — log in, then submit again';"
+      "return '';})()";
   std::string langKeys = req.lang == "cpp" ? "['C++17','C++11','C++']" : req.lang == "java" ? "['Java']" : "['Python 3','Python3','Python']";
   d.fillJs = std::string(kPickOption) + kAttachFile + kClick +
       "var ls=form.querySelector('select[name=\"language\"]')||form.querySelector('select');if(!pick(ls," + langKeys + ")){throw 'language not found in the USACO form';}"

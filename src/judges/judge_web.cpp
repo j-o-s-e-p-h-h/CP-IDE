@@ -362,7 +362,8 @@ void JudgeWeb::onReport(const json& r) {
     std::string fill =
         "(function(){try{"
         "var form=document.querySelector(" + js(drv_.formSelector) + ");"
-        "if(!form){window.__cpReport(JSON.stringify({event:'filled',error:'submit form not found',url:location.href}));return;}"
+        "if(!form){var why='';try{why=" + (drv_.noFormJs.empty() ? std::string("''") : drv_.noFormJs) + "||'';}catch(e){}"
+        "window.__cpReport(JSON.stringify({event:'filled',error:why||'submit form not found',url:location.href}));return;}"
         "var src=" + js(req_.code) + ";" + drv_.fillJs +
         "}catch(e){window.__cpReport(JSON.stringify({event:'filled',error:String(e),url:location.href}));}})();";
     view_->eval(fill);
