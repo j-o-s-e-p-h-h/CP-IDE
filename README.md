@@ -186,7 +186,7 @@ If you are adding a judge, `src/judges/drivers.cpp` is the place; each site is o
 
 It is MIT licensed and free, and it will stay that way. If it saved you time in a contest,
 starring the repo helps more than anything else, since that is how other people doing
-contests find it.
+contests find it ;)).
 
 Opening an issue when something annoys you helps even more. Most of what this app does
 well started with somebody asking "why does it do *that*".
