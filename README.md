@@ -1,6 +1,23 @@
+<div align="center">
+
+<img src="docs/logo.png" width="104" alt="CP IDE logo">
+
 # CP IDE
 
-## A free desktop IDE for competitive programming — import a problem, solve it, run every sample, submit to the judge, without leaving the window.
+**Import a problem, solve it, run every sample, submit to the judge — without leaving the window.**
+
+![License](https://img.shields.io/badge/license-MIT-2cbb5d)
+![C++23](https://img.shields.io/badge/C%2B%2B-23-00599C)
+![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey)
+![Judges](https://img.shields.io/badge/judges-Codeforces%20%C2%B7%20AtCoder%20%C2%B7%20CodeChef%20%C2%B7%20CSES%20%C2%B7%20USACO-f39c12)
+
+[Install](#install-it) · [Build](#build-it-yourself) · [Report a bug](#found-a-bug) · [Known issues](#known-issues) · [License](#license)
+
+</div>
+
+![CP IDE: resuming a contest, writing a solution, running the samples and submitting to Codeforces](docs/demo.gif)
+
+<p align="center"><em>Resume a contest, write the solution, <code>Ctrl+Enter</code> to run every sample, <code>Ctrl+Shift+Enter</code> to submit — the Codeforces verdict comes back in the same window. Real submission, real verdict.</em></p>
 
 CP IDE is a C++ desktop app for people who do timed programming contests. A problem
 arrives from the [Competitive Companion](https://github.com/jmerle/competitive-companion)
@@ -8,7 +25,7 @@ browser extension or a pasted URL, and the app does the boring part: it creates 
 folders, writes the sample tests to disk, renders the statement next to your editor, and
 gives you one key to compile and run everything. It covers:
 
-* Importing a single problem or a whole contest from Codeforces, AtCoder, CSES, USACO and HackerRank
+* Importing a single problem or a whole contest from Codeforces, AtCoder, CodeChef, CSES, USACO and HackerRank
 * Rendering the real statement — images, tables and LaTeX — beside the code, not in a browser tab
 * Running every sample in Python, C++, Java or JavaScript with `PASS` / `WA` / `TLE` / `RE` per case
 * Saying *why* a run failed — the exception, the first differing token, what the exit code means
@@ -19,28 +36,36 @@ gives you one key to compile and run everything. It covers:
 Nothing is paywalled, there is no account, and your solutions are plain files in a folder
 you can open with anything else.
 
-![CP IDE running a Codeforces problem](docs/screenshot.png)
+![The CP IDE window](docs/screenshot.png)
 
-<p align="center"><em>A Codeforces problem: statement on the left, editor on the right, all five samples green.</em></p>
+<p align="center"><em>The statement keeps its own images, tables and LaTeX; the test panel names the case that failed and why.</em></p>
 
 ## Install it
 
-**Windows** — download `CP-IDE-Setup-0.1.0.exe` from the Releases page and run it. It is
-about 8 MB, adds Start Menu and desktop shortcuts, and pulls the Microsoft Edge WebView2
-runtime if the machine lacks it (Windows 11 already has it).
+**Windows has an installer. Linux and macOS are build-from-source today** — see
+[Build it yourself](#build-it-yourself), it is three commands on each.
+
+**Windows** — build `CP-IDE-Setup-<version>.exe` with
+`cmake --build build --target installer` ([Inno Setup 6](https://jrsoftware.org/isinfo.php)
+required) and run it. It is about 4 MB, adds Start Menu and desktop shortcuts, and pulls
+the Microsoft Edge WebView2 runtime if the machine lacks it (Windows 11 already has it).
 
 On first launch the app checks for Python, g++, Java and Node, and offers a one-click
 install for whatever is missing. You do not need all four — only the languages you use.
 
 Then:
 
-1. Install [Competitive Companion](https://github.com/jmerle/competitive-companion) in your browser
+1. Install Competitive Companion — [Chrome](https://chromewebstore.google.com/detail/competitive-companion/cjnmckjndlpiamhfimnnjmnckgghkjbl) or [Firefox](https://addons.mozilla.org/en-US/firefox/addon/competitive-companion/). On Edge, Brave, Opera, Vivaldi or any other Chromium browser, install the Chrome one — Edge will ask you to allow extensions from other stores first.
 2. Check that port **10045** is in its port list (it is, by default)
 3. Open a problem or contest page and click the green **+**
 
 It shows up as a tab, with its samples already in place. No Companion? Paste the URL into
 the box on the home screen instead — a problem URL imports one problem, a contest URL
 imports the whole round.
+
+Which browser you use only matters for the extension. The judge login windows are the
+app's own (WebView2 on Windows, WebKitGTK on Linux, WKWebView on macOS), so signing in to
+Codeforces inside CP IDE is separate from being signed in in your browser, and it sticks.
 
 ![The launcher](docs/home.png)
 
@@ -51,6 +76,11 @@ Press `F1` at any time for the keyboard shortcuts. The ones worth learning first
 
 All dependencies are vendored in `third_party/` — webview, the WebView2 SDK, nlohmann/json,
 Monaco and KaTeX — so the build needs no network access.
+
+```sh
+git clone https://github.com/j-o-s-e-p-h-h/Competitive-programming-IDE-project.git cp-ide
+cd cp-ide
+```
 
 **Windows**, with the [MSYS2](https://www.msys2.org/) UCRT64 toolchain:
 
@@ -68,6 +98,7 @@ cmake --build build
 sudo apt install g++ cmake ninja-build libwebkit2gtk-4.1-dev   # Fedora: webkit2gtk4.1-devel
 cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build && ./build/bin/cp-ide
+sudo cmake --install build               # optional: puts it on PATH with a menu entry
 ```
 
 **macOS:**
@@ -77,6 +108,10 @@ xcode-select --install && brew install cmake ninja
 cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build                      # -> build/bin/cp-ide.app
 ```
+
+The macOS bundle is neither signed nor notarized, so Gatekeeper will refuse to open it on
+first launch — right-click the app and pick **Open** to run it anyway. A build you compiled
+yourself is the only kind there is at the moment.
 
 ### How it fits together
 
@@ -106,7 +141,9 @@ Plain files, plain JSON. Delete a folder and that problem is gone; there is no d
 
 ## Found a bug?
 
-Please open an issue using the Issues tab above. The useful ones say which judge and
+Please open an issue on the
+[issue tracker](https://github.com/j-o-s-e-p-h-h/Competitive-programming-IDE-project/issues).
+The useful ones say which judge and
 problem URL it happened on, since most rough edges are one site's markup rather than the
 app itself.
 
@@ -120,10 +157,11 @@ If you are adding a judge, `src/judges/drivers.cpp` is the place; each site is o
 
 ## Known issues
 
-* **Linux and macOS get far less testing than Windows.** They build from the same sources and work, but Windows is what gets used daily. Reports from the other two are especially welcome.
+* **Only Windows has an installer.** Linux and macOS build from the same sources and run fine, but there is no `.deb`, AppImage or signed `.dmg` yet — you build it yourself.
+* **Linux and macOS get far less testing than Windows.** Windows is what gets used daily. Reports from the other two are especially welcome.
 * **The C++ debugger needs gdb**, which macOS does not ship. The Python debugger works everywhere.
 * **USACO verdict parsing is best effort**, and USACO shows no submit form at all once a contest closes — the app now tells you which of those happened rather than failing silently.
-* **HackerRank has no in-app submit.** Submit copies your code and opens the problem page.
+* **CodeChef and HackerRank import but do not auto-submit.** Statements, limits and samples come in fine; Submit copies your code to the clipboard and opens the site's submit page, because both render their submit forms in JavaScript that changes often enough not to be worth pinning to.
 * **Codeforces sits behind an anti-bot check.** Statement fetching falls back to the `curl.exe` that ships with Windows, which gets through. The browser fallback always works if auto-submit is blocked.
 
 ## Like this project?
