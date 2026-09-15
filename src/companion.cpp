@@ -17,6 +17,7 @@ std::string judgeForUrl(const std::string& url) {
   if (isHost("cses.fi")) return "cses";
   if (isHost("usaco.org")) return "usaco";
   if (isHost("hackerrank.com")) return "hackerrank";
+  if (isHost("codechef.com")) return "codechef";
   return "other";
 }
 

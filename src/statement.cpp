@@ -424,6 +424,120 @@ std::string dollarMath(const std::string& s) {
   return out;
 }
 
+// CodeChef renders its problem pages in the browser, so the HTML that arrives over
+// HTTP carries no statement at all. Its public JSON API does, and in a cleaner form
+// than the page would have been: <contest>/<code> out of the URL, and the API answers
+// with the title, limits, the statement in parts, and the samples already separated.
+//   /problems/FLOW001                 -> PRACTICE / FLOW001
+//   /START100A/problems/XYZ           -> START100A / XYZ
+//   /practice/course/.../problems/ABC -> PRACTICE / ABC
+bool codechefApiUrl(const std::string& url, std::string& out) {
+  std::smatch m;
+  static const std::regex withContest(R"(codechef\.com/([A-Za-z0-9_\-]+)/problems/([A-Za-z0-9_\-]+))");
+  static const std::regex practice(R"(codechef\.com/(?:.*/)?problems/([A-Za-z0-9_\-]+))");
+  std::string contest, code;
+  if (std::regex_search(url, m, withContest) && m[1] != "practice") {
+    contest = m[1];
+    code = m[2];
+  } else if (std::regex_search(url, m, practice)) {
+    contest = "PRACTICE";
+    code = m[1];
+  } else {
+    return false;
+  }
+  out = "https://www.codechef.com/api/contests/" + contest + "/problems/" + code;
+  return true;
+}
+
+// The statement parts come back as light Markdown. Only the handful of constructs
+// CodeChef actually emits are handled; $…$ maths is left for dollarMath.
+std::string miniMarkdown(const std::string& md) {
+  std::string out;
+  bool inList = false;
+  size_t i = 0;
+  auto inline_ = [](const std::string& s) {
+    std::string r = s;
+    r = std::regex_replace(r, std::regex(R"(\*\*([^*]+)\*\*)"), "<b>$1</b>");
+    r = std::regex_replace(r, std::regex(R"(`([^`]+)`)"), "<code>$1</code>");
+    // [text](url), http(s) only — anything else stays literal rather than becoming
+    // a link to a scheme we did not intend to allow.
+    r = std::regex_replace(r, std::regex(R"(\[([^\]]+)\]\((https?://[^)\s]+)\))"),
+                           "<a href=\"$2\" target=\"_blank\">$1</a>");
+    return r;
+  };
+  while (i <= md.size()) {
+    size_t nl = md.find('\n', i);
+    std::string line = util::trim(md.substr(i, nl == std::string::npos ? std::string::npos : nl - i));
+    if (!line.empty() && (line.rfind("- ", 0) == 0 || line.rfind("* ", 0) == 0)) {
+      if (!inList) { out += "<ul>"; inList = true; }
+      out += "<li>" + inline_(line.substr(2)) + "</li>";
+    } else {
+      if (inList) { out += "</ul>"; inList = false; }
+      if (!line.empty()) out += "<p>" + inline_(line) + "</p>";
+    }
+    if (nl == std::string::npos) break;
+    i = nl + 1;
+  }
+  if (inList) out += "</ul>";
+  return out;
+}
+
+StatementInfo parseCodeChef(const std::string& body, const std::string& url) {
+  StatementInfo si;
+  json j;
+  try {
+    j = json::parse(body);
+  } catch (const std::exception&) {
+    si.error = "CodeChef sent something that is not JSON";
+    return si;
+  }
+  auto str = [&](const json& o, const char* key) {
+    return o.contains(key) && o[key].is_string() ? o[key].get<std::string>() : std::string();
+  };
+  if (!str(j, "problem_name").empty()) si.title = str(j, "problem_name");
+  si.timeLimitSec = atof(str(j, "max_timelimit").c_str());
+  int rating = atoi(str(j, "difficulty_rating").c_str());
+  if (rating > 0) si.rating = rating;   // unrated practice problems report -1
+
+  const json& pc = j.contains("problemComponents") ? j["problemComponents"] : json::object();
+  if (pc.is_object() && pc.contains("sampleTestCases") && pc["sampleTestCases"].is_array()) {
+    for (const auto& c : pc["sampleTestCases"]) {
+      TestCase t;
+      t.in = str(c, "input");
+      t.out = str(c, "output");
+      if (!t.in.empty()) si.samples.push_back(t);
+    }
+  }
+
+  std::string html;
+  std::string statement = pc.is_object() ? str(pc, "statement") : std::string();
+  if (!statement.empty()) {
+    // The modern format: statement, then each section that is switched on.
+    html = miniMarkdown(statement);
+    auto section = [&](const char* title, const char* key, const char* stateKey) {
+      std::string text = str(pc, key);
+      if (text.empty()) return;
+      if (stateKey && str(pc, stateKey) == "false") return;
+      html += "<div class=\"section-title\">" + std::string(title) + "</div>" + miniMarkdown(text);
+    };
+    section("Input Format", "inputFormat", "inputFormatState");
+    section("Output Format", "outputFormat", "outputFormatState");
+    section("Constraints", "constraints", "constraintsState");
+    section("Subtasks", "subtasks", "subtasksState");
+  } else {
+    // Older problems only have the rendered legacy body, samples included.
+    html = str(j, "body");
+    si.selfSamples = !html.empty();
+  }
+  if (html.empty()) {
+    si.error = "No statement in CodeChef's answer for this problem";
+    return si;
+  }
+  si.html = dollarMath(html::absolutizeUrls(html::removeScripts(html), url));
+  si.ok = true;
+  return si;
+}
+
 StatementInfo parseUsaco(const std::string& doc, const std::string& url) {
   StatementInfo si;
   std::string stmt = html::extractTag(doc, "id=\"probtext-text\"", "span");
@@ -571,7 +685,14 @@ StatementInfo fetchStatement(HttpClient& http, const std::string& url, const std
   }
   int status = 0;
   std::string body;
-  if (!fetchPage(http, url, status, body)) {
+  // CodeChef's page is rendered by JavaScript; its API is what actually holds the
+  // statement, so that is what gets fetched.
+  std::string fetchUrl = url;
+  if (judge == "codechef" && !codechefApiUrl(url, fetchUrl)) {
+    si.error = "Not a CodeChef problem URL";
+    return si;
+  }
+  if (!fetchPage(http, fetchUrl, status, body)) {
     si.error = body.empty() ? "Could not reach the site" : body;
     return si;
   }
@@ -582,5 +703,6 @@ StatementInfo fetchStatement(HttpClient& http, const std::string& url, const std
   if (judge == "codeforces") return parseCodeforces(body, url);
   if (judge == "atcoder") return parseAtCoder(body, url);
   if (judge == "usaco") return parseUsaco(body, url);
+  if (judge == "codechef") return parseCodeChef(body, url);
   return parseGeneric(body, url);
 }

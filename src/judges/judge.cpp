@@ -48,6 +48,17 @@ std::unique_ptr<Judge> makeJudge(const std::string& judgeName) {
       return util::replaceAll(p.url, "/task/", "/submit/");
     });
   if (judgeName == "usaco") return std::make_unique<BrowserOnlyJudge>("USACO", [](const Problem& p) { return p.url; });
+  if (judgeName == "codechef")
+    return std::make_unique<BrowserOnlyJudge>("CodeChef", [](const Problem& p) {
+      // https://www.codechef.com/START100A/problems/XYZ -> /submit/XYZ, which is the
+      // submit page for the problem whichever contest it was opened from.
+      auto pos = p.url.find("/problems/");
+      if (pos == std::string::npos) return p.url;
+      std::string code = p.url.substr(pos + 10);
+      auto q = code.find_first_of("?#/");
+      if (q != std::string::npos) code = code.substr(0, q);
+      return code.empty() ? p.url : "https://www.codechef.com/submit/" + code;
+    });
   if (judgeName == "hackerrank")
     return std::make_unique<BrowserOnlyJudge>("HackerRank", [](const Problem& p) { return p.url; });
   return std::make_unique<BrowserOnlyJudge>("Judge", [](const Problem& p) { return p.url; });
