@@ -1912,14 +1912,9 @@ window.__cp = {
         if (ev.compileError) { S.compileError = ev.compileError; toast('Compilation failed — see the error panel', 'var(--bad)'); }
         else if (ev.cancelled) toast('Run stopped', 'var(--muted)');
         else if (badIdx >= 0) {
-          const bad = p.tests[badIdx];
-          // Say what actually happened rather than just naming the verdict.
-          const detail = bad.status === 're' ? errorText(bad) : '';
-          const why = bad.status === 'tle' ? `Time limit exceeded on case ${badIdx + 1}`
-            : bad.status === 're' ? `Case ${badIdx + 1}: ${detail || 'runtime error'}`
-            : bad.got === '(no output)' ? `Case ${badIdx + 1}: no output`
-            : `Wrong answer on case ${badIdx + 1}`;
-          toast(`${why} · ${ev.passed}/${ev.total} passed`, 'var(--bad)', bad.status === 're' ? 7000 : 2600);
+          // No toast: the Test Result panel already shows the verdict, why it
+          // failed, the per-case marks and the pass count, so one would only
+          // repeat it over the answer it is describing.
           S.selCase = badIdx; S.tcTab = 'result';            // focus mode opens on the case that broke
         }
         else if (ev.ok) toast(`${only >= 0 ? `Case ${only + 1} passed` : `All ${ev.total} test${ev.total === 1 ? '' : 's'} passed`} · ${ev.ms} ms`, 'var(--ok)');
