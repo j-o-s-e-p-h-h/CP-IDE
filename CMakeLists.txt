@@ -92,6 +92,17 @@ if(WIN32)
 endif()
 add_dependencies(cp-ide cp_ide_assets)
 
+# A .app finds its files at Contents/Resources (findUiDir's "../Resources/ui"), so the
+# assets have to be copied inside the bundle as well as next to it — otherwise the
+# bundle runs but shows a blank window.
+if(APPLE)
+  set(CP_IDE_RES "$<TARGET_BUNDLE_CONTENT_DIR:cp-ide>/Resources")
+  add_custom_command(TARGET cp-ide POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_BINARY_DIR}/bin/ui" "${CP_IDE_RES}/ui"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_BINARY_DIR}/bin/tools" "${CP_IDE_RES}/tools"
+    COMMENT "Copying UI and tools into the .app bundle")
+endif()
+
 # ---- install (Linux: `cmake --install build`; macOS: the .app bundle) ---------
 if(UNIX AND NOT APPLE)
   include(GNUInstallDirs)
@@ -99,6 +110,40 @@ if(UNIX AND NOT APPLE)
   install(DIRECTORY "${CMAKE_BINARY_DIR}/bin/ui" "${CMAKE_BINARY_DIR}/bin/tools" DESTINATION ${CMAKE_INSTALL_DATADIR}/cp-ide)
   install(FILES installer/cp-ide.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
   install(FILES ui/assets/icon-256.png DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/256x256/apps RENAME cp-ide.png)
+endif()
+if(APPLE)
+  install(TARGETS cp-ide BUNDLE DESTINATION .)
+endif()
+
+# ---- packages (CPack): `cpack` in the build dir after a build ----------------
+# Linux  -> cp-ide_<version>_amd64.deb and a .tar.gz
+# macOS  -> CP-IDE-<version>-Darwin.dmg  (drag to Applications)
+# Windows keeps the Inno Setup target below instead: it handles the WebView2
+# runtime and the shortcuts, which a generic generator would not.
+if(NOT WIN32)
+  set(CPACK_PACKAGE_NAME "cp-ide")
+  set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
+  set(CPACK_PACKAGE_VENDOR "CP IDE contributors")
+  set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Desktop IDE for competitive programming")
+  set(CPACK_PACKAGE_INSTALL_DIRECTORY "cp-ide")
+  set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
+  set(CPACK_STRIP_FILES TRUE)
+  if(APPLE)
+    set(CPACK_GENERATOR "DragNDrop")
+    set(CPACK_DMG_VOLUME_NAME "CP IDE ${PROJECT_VERSION}")
+    # Unsigned and un-notarized: Gatekeeper blocks it until the user right-clicks
+    # and picks Open. Signing needs a paid Apple Developer account.
+  else()
+    set(CPACK_GENERATOR "DEB;TGZ")
+    set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
+    set(CPACK_DEBIAN_PACKAGE_SECTION "devel")
+    set(CPACK_DEBIAN_PACKAGE_MAINTAINER "CP IDE contributors")
+    set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/j-o-s-e-p-h-h/Competitive-programming-IDE-project")
+    # WebKitGTK and GTK are linked, not vendored, so the package must ask for them.
+    set(CPACK_DEBIAN_PACKAGE_DEPENDS "libwebkit2gtk-4.1-0, libgtk-3-0")
+    set(CPACK_DEBIAN_PACKAGE_RECOMMENDS "g++, python3, nodejs")
+  endif()
+  include(CPack)
 endif()
 
 # ---- installer (Inno Setup 6) ----------------------------------------------
