@@ -48,9 +48,21 @@ Prefer to compile it? [Build it yourself](#build-it-yourself) is three commands.
 
 | Platform | Download | Notes |
 | --- | --- | --- |
-| Windows | `CP-IDE-Setup-0.1.0.exe` | 4.1 MB. Start Menu and desktop shortcuts; pulls the Edge WebView2 runtime if the machine lacks it (Windows 11 already has it). |
+| Windows | `CP-IDE-Setup-0.1.0.exe` | 4.1 MB. Start Menu and desktop shortcuts; pulls the Edge WebView2 runtime if the machine lacks it (Windows 11 already has it). SmartScreen will warn — see below. |
 | Linux | `cp-ide_0.1.0_amd64.deb` | `sudo apt install ./cp-ide_0.1.0_amd64.deb`. A `.tar.gz` is there too if you are not on Debian or Ubuntu. |
 | macOS | `cp-ide-0.1.0-Darwin.dmg` | Apple Silicon. Unsigned, so the first launch needs right-click → **Open**. |
+
+### "Windows protected your PC"
+
+Expected, and not a sign anything is wrong. Click **More info**, then **Run anyway**.
+
+SmartScreen shows that for any installer without a code-signing certificate, and the
+publisher reads *Unknown* for the same reason. A certificate costs a few hundred dollars a
+year, and an ordinary one still earns the warning until enough people have downloaded the
+file for it to build reputation, so this project does not have one. macOS does the same
+thing to the `.dmg` — right-click the app and pick **Open** the first time.
+
+You can check you got the real file: every release lists a SHA-256 next to each asset.
 
 On first launch the app checks for Python, g++, Java and Node, and offers a one-click
 install for whatever is missing. You do not need all four — only the languages you use.
@@ -165,7 +177,8 @@ If you are adding a judge, `src/judges/drivers.cpp` is the place; each site is o
 
 ## Known issues
 
-* **The macOS build is Apple Silicon only and unsigned.** Gatekeeper blocks the first launch until you right-click → Open. Signing and notarizing needs a paid Apple Developer account; an Intel build would need a second CI job.
+* **Nothing is code-signed.** Windows SmartScreen says "Windows protected your PC" and shows the publisher as Unknown; macOS Gatekeeper refuses the first launch. Both are one extra click. Certificates cost a few hundred dollars a year each, and a plain Windows one still warns until the file builds download reputation.
+* **The macOS build is Apple Silicon only.** An Intel build would need a second CI job.
 * **Linux and macOS get far less testing than Windows.** They are built and packaged on every release, but Windows is what gets used daily. Reports from the other two are especially welcome.
 * **The C++ debugger needs gdb**, which macOS does not ship. The Python debugger works everywhere.
 * **USACO verdict parsing is best effort**, and USACO shows no submit form at all once a contest closes — the app now tells you which of those happened rather than failing silently.

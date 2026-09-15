@@ -109,9 +109,14 @@ jobs:
             | You are on | Download |
             | --- | --- |
             | **Windows** | `CP-IDE-Setup-*.exe` — installs, adds shortcuts, fetches WebView2 if needed |
+            | | *SmartScreen will say "Windows protected your PC" — click **More info** → **Run anyway**. The installer is unsigned; see below.* |
             | **Debian or Ubuntu** | `cp-ide_*_amd64.deb` — `sudo apt install ./cp-ide_*_amd64.deb` |
             | **Any other Linux** | `cp-ide-*-Linux.tar.gz` — unpack and run `bin/cp-ide` |
             | **macOS** (Apple Silicon) | `cp-ide-*-Darwin.dmg` — unsigned, so right-click the app and pick **Open** the first time |
+
+            **Neither build is code-signed**, so Windows SmartScreen and macOS Gatekeeper
+            both warn on first launch. Use **Run anyway** on Windows, right-click → **Open**
+            on macOS. Each asset's SHA-256 is listed above if you want to check the file.
 
             *Source code* is only for building it yourself — see the
             [README](https://github.com/j-o-s-e-p-h-h/CP-IDE#build-it-yourself).
