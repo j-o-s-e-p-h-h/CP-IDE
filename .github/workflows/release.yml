@@ -1,0 +1,103 @@
+# Builds the installers for all three platforms and attaches them to the release.
+#
+# The .dmg and the .deb cannot be produced on a Windows machine — macOS needs
+# clang and hdiutil, Debian packaging needs dpkg — so the runners do it instead.
+# Push a tag and the release fills itself in:
+#
+#   git tag -a v0.1.0 -m "CP IDE 0.1.0" && git push origin v0.1.0
+#
+# Or run it by hand from the Actions tab to test without cutting a release.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+      - name: Inno Setup
+        run: choco install innosetup --no-progress -y
+      - name: Build
+        shell: msys2 {0}
+        run: |
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build
+      - name: Installer
+        shell: msys2 {0}
+        run: cmake --build build --target installer
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: installer/out/CP-IDE-Setup-*.exe
+          if-no-files-found: error
+
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++ cmake ninja-build libwebkit2gtk-4.1-dev
+      - name: Build
+        run: |
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build
+      - name: Package
+        working-directory: build
+        run: cpack        # -> .deb and .tar.gz, per CPACK_GENERATOR
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages
+          path: |
+            build/*.deb
+            build/*.tar.gz
+          if-no-files-found: error
+
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependencies
+        run: brew install cmake ninja
+      - name: Build
+        run: |
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build
+      - name: Package
+        working-directory: build
+        run: cpack        # -> DragNDrop .dmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmg
+          path: build/*.dmg
+          if-no-files-found: error
+
+  # Only a tag push publishes; a manual run just leaves the artifacts to download.
+  publish:
+    needs: [windows, linux, macos]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/**/*
+          generate_release_notes: true
