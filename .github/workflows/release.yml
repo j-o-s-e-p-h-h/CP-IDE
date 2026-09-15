@@ -114,6 +114,6 @@ jobs:
             | **macOS** (Apple Silicon) | `cp-ide-*-Darwin.dmg` — unsigned, so right-click the app and pick **Open** the first time |
 
             *Source code* is only for building it yourself — see the
-            [README](https://github.com/j-o-s-e-p-h-h/Competitive-programming-IDE-project#build-it-yourself).
+            [README](https://github.com/j-o-s-e-p-h-h/CP-IDE#build-it-yourself).
 
             ---

@@ -138,7 +138,7 @@ if(NOT WIN32)
     set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
     set(CPACK_DEBIAN_PACKAGE_SECTION "devel")
     set(CPACK_DEBIAN_PACKAGE_MAINTAINER "CP IDE contributors")
-    set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/j-o-s-e-p-h-h/Competitive-programming-IDE-project")
+    set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/j-o-s-e-p-h-h/CP-IDE")
     # WebKitGTK and GTK are linked, not vendored, so the package must ask for them.
     set(CPACK_DEBIAN_PACKAGE_DEPENDS "libwebkit2gtk-4.1-0, libgtk-3-0")
     set(CPACK_DEBIAN_PACKAGE_RECOMMENDS "g++, python3, nodejs")

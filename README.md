@@ -6,8 +6,8 @@
 
 **Import a problem, solve it, run every sample, submit to the judge — without leaving the window.**
 
-[![Release](https://img.shields.io/github/v/release/j-o-s-e-p-h-h/Competitive-programming-IDE-project?color=2cbb5d)](https://github.com/j-o-s-e-p-h-h/Competitive-programming-IDE-project/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/j-o-s-e-p-h-h/Competitive-programming-IDE-project/total?color=2cbb5d)](https://github.com/j-o-s-e-p-h-h/Competitive-programming-IDE-project/releases)
+[![Release](https://img.shields.io/github/v/release/j-o-s-e-p-h-h/CP-IDE?color=2cbb5d)](https://github.com/j-o-s-e-p-h-h/CP-IDE/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/j-o-s-e-p-h-h/CP-IDE/total?color=2cbb5d)](https://github.com/j-o-s-e-p-h-h/CP-IDE/releases)
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
 ![C++23](https://img.shields.io/badge/C%2B%2B-23-00599C)
 ![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey)
@@ -43,7 +43,7 @@ gives you one key to compile and run everything. It covers:
 ## Install it
 
 Every platform has a download on the
-[latest release](https://github.com/j-o-s-e-p-h-h/Competitive-programming-IDE-project/releases/latest).
+[latest release](https://github.com/j-o-s-e-p-h-h/CP-IDE/releases/latest).
 Prefer to compile it? [Build it yourself](#build-it-yourself) is three commands.
 
 | Platform | Download | Notes |
@@ -80,7 +80,7 @@ All dependencies are vendored in `third_party/` — webview, the WebView2 SDK, n
 Monaco and KaTeX — so the build needs no network access.
 
 ```sh
-git clone https://github.com/j-o-s-e-p-h-h/Competitive-programming-IDE-project.git cp-ide
+git clone https://github.com/j-o-s-e-p-h-h/CP-IDE.git cp-ide
 cd cp-ide
 ```
 
@@ -150,7 +150,7 @@ Plain files, plain JSON. Delete a folder and that problem is gone; there is no d
 ## Found a bug?
 
 Please open an issue on the
-[issue tracker](https://github.com/j-o-s-e-p-h-h/Competitive-programming-IDE-project/issues).
+[issue tracker](https://github.com/j-o-s-e-p-h-h/CP-IDE/issues).
 The useful ones say which judge and
 problem URL it happened on, since most rough edges are one site's markup rather than the
 app itself.
