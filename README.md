@@ -50,7 +50,7 @@ Prefer to compile it? [Build it yourself](#build-it-yourself) is three commands.
 | --- | --- | --- |
 | Windows | `CP-IDE-Setup-0.1.0.exe` | 4.1 MB. Start Menu and desktop shortcuts; pulls the Edge WebView2 runtime if the machine lacks it (Windows 11 already has it). |
 | Linux | `cp-ide_0.1.0_amd64.deb` | `sudo apt install ./cp-ide_0.1.0_amd64.deb`. A `.tar.gz` is there too if you are not on Debian or Ubuntu. |
-| macOS | `CP-IDE-0.1.0-Darwin.dmg` | Apple Silicon. Unsigned, so the first launch needs right-click → **Open**. |
+| macOS | `cp-ide-0.1.0-Darwin.dmg` | Apple Silicon. Unsigned, so the first launch needs right-click → **Open**. |
 
 On first launch the app checks for Python, g++, Java and Node, and offers a one-click
 install for whatever is missing. You do not need all four — only the languages you use.
@@ -112,8 +112,14 @@ cmake --build build                      # -> build/bin/cp-ide.app
 ```
 
 The macOS bundle is neither signed nor notarized, so Gatekeeper will refuse to open it on
-first launch — right-click the app and pick **Open** to run it anyway. A build you compiled
-yourself is the only kind there is at the moment.
+first launch — right-click the app and pick **Open** to run it anyway. The same is true of
+the `.dmg` on the releases page.
+
+`cpack` from the build directory produces the installer for the platform you are on: a
+`.deb` and a `.tar.gz` on Linux, a `.dmg` on macOS. On Windows use
+`cmake --build build --target installer`, which needs
+[Inno Setup 6](https://jrsoftware.org/isinfo.php). Pushing a `v*` tag makes CI build and
+publish all three.
 
 ### How it fits together
 
