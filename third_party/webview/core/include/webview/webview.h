@@ -1215,7 +1215,13 @@ public:
 
 private:
   std::string m_code;
-  std::unique_ptr<impl> m_impl;
+  // shared_ptr, not unique_ptr: `impl` is only forward-declared here and defined
+  // per-platform much further down. unique_ptr's deleter needs the complete type
+  // wherever the destructor is instantiated, which libc++ does right here — so
+  // AppleClang refused to compile this ("cannot delete an incomplete type") while
+  // GCC happened to delay it. shared_ptr erases the deleter at construction, where
+  // the type is complete. Ownership is still single; only the control block is new.
+  std::shared_ptr<impl> m_impl;
 };
 
 class engine_base {

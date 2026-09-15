@@ -61,7 +61,9 @@ class App {
   bool devHasResult_ = false;
   void spawn(std::function<void()> fn);  // detached worker; shutdown() waits for all of them
   StressRunner stress_;
-  Debugger debugger_;
+  // Elaborated type specifier: macOS's MacTypes.h declares a function Debugger(),
+  // which hides our class and makes the plain name ambiguous there.
+  class Debugger debugger_;
   std::map<std::string, std::unique_ptr<class JudgeWeb>> judgeWebs_;  // in-app judge windows, one per site
   class JudgeWeb& judgeWeb(const std::string& judgeId);
   std::string defaultLang();  // from state.json (set on the setup page)
