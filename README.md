@@ -4,7 +4,7 @@
 
 # CP IDE
 
-**Import a problem, solve it, run every sample, submit to the judge — without leaving the window.**
+**Import a problem, solve it, run every sample, and submit to the judge without leaving the window.**
 
 [![Release](https://img.shields.io/github/v/release/j-o-s-e-p-h-h/CP-IDE?color=2cbb5d)](https://github.com/j-o-s-e-p-h-h/CP-IDE/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/j-o-s-e-p-h-h/CP-IDE/total?color=2cbb5d)](https://github.com/j-o-s-e-p-h-h/CP-IDE/releases)
@@ -19,22 +19,21 @@
 
 ![CP IDE: resuming a contest, writing a solution, running the samples and submitting to Codeforces](docs/demo.gif)
 
-<p align="center"><em>Resume a contest, write the solution, <code>Ctrl+Enter</code> to run every sample, <code>Ctrl+Shift+Enter</code> to submit — the Codeforces verdict comes back in the same window. Real submission, real verdict.</em></p>
+<p align="center"><em>Resume a contest, write the solution, press <code>Ctrl+Enter</code> to run every sample and <code>Ctrl+Shift+Enter</code> to submit. The Codeforces verdict comes back in the same window; the recording is a real submission.</em></p>
 
 CP IDE is a C++ desktop app for people who do timed programming contests. A problem
 arrives from the [Competitive Companion](https://github.com/jmerle/competitive-companion)
-browser extension or a pasted URL, and the app creates the
-folders, writes the sample tests to disk, renders the statement next to your editor, and
-gives you one key to compile and run everything. It covers:
+browser extension or a pasted URL, and the app creates the folders, writes the sample
+tests to disk, renders the statement next to your editor, and gives you one key to compile
+and run everything. It covers:
 
 * Importing a single problem or a whole contest from Codeforces, AtCoder, CodeChef, CSES, USACO and HackerRank
-* Rendering the real statement — images, tables and LaTeX — beside the code, not in a browser tab
+* Rendering the real statement (images, tables and LaTeX) beside the code instead of in a browser tab
 * Running every sample in Python, C++, Java or JavaScript with `PASS` / `WA` / `TLE` / `RE` per case
-* Saying *why* a run failed — the exception, the first differing token, what the exit code means
+* Saying *why* a run failed: the exception, the first differing token, or what the exit code means
 * Submitting to Codeforces, AtCoder, CSES and USACO from inside the app, with the verdict polled back
 * Stress testing against a brute force, and a real step debugger for Python and C++
 * Keeping a per-problem timer, notes and a verdict history across every contest you have opened
-
 
 ![The CP IDE window](docs/screenshot.png)
 
@@ -44,42 +43,42 @@ gives you one key to compile and run everything. It covers:
 
 Every platform has a download on the
 [latest release](https://github.com/j-o-s-e-p-h-h/CP-IDE/releases/latest).
-Prefer to compile it? [Build it yourself](#build-it-yourself) is three commands.
+To compile it instead, [build it yourself](#build-it-yourself) in three commands.
 
 | Platform | Download | Notes |
 | --- | --- | --- |
-| Windows | `CP-IDE-Setup-0.1.0.exe` | 4.1 MB. Start Menu and desktop shortcuts; pulls the Edge WebView2 runtime if the machine lacks it (Windows 11 already has it). SmartScreen will warn — see below. |
+| Windows | `CP-IDE-Setup-0.1.0.exe` | 4.1 MB. Start Menu and desktop shortcuts; pulls the Edge WebView2 runtime if the machine lacks it (Windows 11 already has it). SmartScreen will warn; see below. |
 | Linux | `cp-ide_0.1.0_amd64.deb` | `sudo apt install ./cp-ide_0.1.0_amd64.deb`. A `.tar.gz` is there too if you are not on Debian or Ubuntu. |
-| macOS | `cp-ide-0.1.0-Darwin.dmg` | Apple Silicon. Unsigned, so the first launch needs right-click → **Open**. |
+| macOS | `cp-ide-0.1.0-Darwin.dmg` | Apple Silicon. Unsigned, so the first launch needs a right-click and **Open**. |
 
 ### "Windows protected your PC"
 
-Expected, and not a sign anything is wrong. Click **More info**, then **Run anyway**.
+This is expected. Click **More info**, then **Run anyway**.
 
-SmartScreen shows that for any installer without a code-signing certificate, and the
-publisher reads *Unknown* for the same reason. A certificate costs a few hundred dollars a
-year, and an ordinary one still earns the warning until enough people have downloaded the
-file for it to build reputation, so this project does not have one. macOS does the same
-thing to the `.dmg` — right-click the app and pick **Open** the first time.
+SmartScreen shows that warning for any installer without a code-signing certificate, which
+is also why the publisher reads *Unknown*. A certificate costs a few hundred dollars a
+year, and an ordinary one still triggers the warning until enough people have downloaded
+the file to build its reputation, so this project does not have one. macOS treats the
+`.dmg` the same way: right-click the app and pick **Open** the first time.
 
 You can check you got the real file: every release lists a SHA-256 next to each asset.
 
 On first launch the app checks for Python, g++, Java and Node, and offers a one-click
-install for whatever is missing. You do not need all four — only the languages you use.
+install for whatever is missing. You only need the languages you actually use.
 
 Then:
 
-1. Install Competitive Companion — [Chrome](https://chromewebstore.google.com/detail/competitive-companion/cjnmckjndlpiamhfimnnjmnckgghkjbl) or [Firefox](https://addons.mozilla.org/en-US/firefox/addon/competitive-companion/). On Edge, Brave, Opera, Vivaldi or any other Chromium browser, install the Chrome one — Edge will ask you to allow extensions from other stores first.
-2. Check that port **10045** is in its port list (it is, by default)
+1. Install Competitive Companion, from [Chrome](https://chromewebstore.google.com/detail/competitive-companion/cjnmckjndlpiamhfimnnjmnckgghkjbl) or [Firefox](https://addons.mozilla.org/en-US/firefox/addon/competitive-companion/). On Edge, Brave, Opera, Vivaldi or any other Chromium browser, install the Chrome one. Edge will ask you to allow extensions from other stores first.
+2. Check that port 10045 is in its port list (it is, by default)
 3. Open a problem or contest page and click the green **+**
 
-It shows up as a tab, with its samples already in place. No Companion? Paste the URL into
-the box on the home screen instead — a problem URL imports one problem, a contest URL
-imports the whole round.
+It shows up as a tab with its samples already in place. Without Companion, paste the URL
+into the box on the home screen: a problem URL imports one problem, a contest URL imports
+the whole round.
 
 Which browser you use only matters for the extension. The judge login windows are the
 app's own (WebView2 on Windows, WebKitGTK on Linux, WKWebView on macOS), so signing in to
-Codeforces inside CP IDE is separate from being signed in in your browser, and it sticks.
+Codeforces inside CP IDE is separate from your browser session, and it persists.
 
 ![The launcher](docs/home.png)
 
@@ -88,15 +87,15 @@ Press `F1` at any time for the keyboard shortcuts. The ones worth learning first
 
 ## Build it yourself
 
-All dependencies are vendored in `third_party/` — webview, the WebView2 SDK, nlohmann/json,
-Monaco and KaTeX — so the build needs no network access.
+All dependencies are vendored in `third_party/` (webview, the WebView2 SDK, nlohmann/json,
+Monaco and KaTeX), so the build needs no network access.
 
 ```sh
 git clone https://github.com/j-o-s-e-p-h-h/CP-IDE.git cp-ide
 cd cp-ide
 ```
 
-**Windows**, with the [MSYS2](https://www.msys2.org/) UCRT64 toolchain:
+On Windows, with the [MSYS2](https://www.msys2.org/) UCRT64 toolchain:
 
 ```powershell
 pacman -S mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja
@@ -106,7 +105,7 @@ cmake --build build
 .\build\bin\cp-ide.exe
 ```
 
-**Linux:**
+On Linux:
 
 ```sh
 sudo apt install g++ cmake ninja-build libwebkit2gtk-4.1-dev   # Fedora: webkit2gtk4.1-devel
@@ -115,7 +114,7 @@ cmake --build build && ./build/bin/cp-ide
 sudo cmake --install build               # optional: puts it on PATH with a menu entry
 ```
 
-**macOS:**
+On macOS:
 
 ```sh
 xcode-select --install && brew install cmake ninja
@@ -123,9 +122,9 @@ cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build                      # -> build/bin/cp-ide.app
 ```
 
-The macOS bundle is neither signed nor notarized, so Gatekeeper will refuse to open it on
-first launch — right-click the app and pick **Open** to run it anyway. The same is true of
-the `.dmg` on the releases page.
+The macOS bundle is neither signed nor notarized, so Gatekeeper refuses to open it on first
+launch. Right-click the app and pick **Open** to run it anyway. The same applies to the
+`.dmg` on the releases page.
 
 `cpack` from the build directory produces the installer for the platform you are on: a
 `.deb` and a `.tar.gz` on Linux, a `.dmg` on macOS. On Windows use
@@ -144,8 +143,8 @@ third_party/    vendored dependencies
 ```
 
 The core is C++ and owns everything that touches disk, processes and judges. The UI is a
-web front end in a native window, talking to the core over a local RPC bridge. If you want
-to change how something *looks*, you want `ui/`. How it *behaves*, `src/`.
+web front end in a native window, talking to the core over a local RPC bridge. Change how
+something *looks* in `ui/`, how it *behaves* in `src/`.
 
 Your data lives in `%USERPROFILE%\cp` (`~/cp` elsewhere; override with `CP_IDE_HOME`):
 
@@ -157,44 +156,44 @@ cp/contests/<contest>/<problem>/
     problem.json                            title, URL, limits, fetched statement
 ```
 
-Plain files, plain JSON. Delete a folder and that problem is gone; there is no database.
+Everything is plain files and plain JSON. Delete a folder and that problem is gone; there
+is no database.
 
 ## Found a bug?
 
 Please open an issue on the
-[issue tracker](https://github.com/j-o-s-e-p-h-h/CP-IDE/issues).
-The useful ones say which judge and
-problem URL it happened on, since most rough edges are one site's markup rather than the
-app itself.
+[issue tracker](https://github.com/j-o-s-e-p-h-h/CP-IDE/issues). The useful ones say which
+judge and problem URL it happened on, since most rough edges come from one site's markup
+rather than the app itself.
 
-Pull requests are welcome. Two things make them easy to merge:
-
-* **One change per PR.** A statement-parser fix and a UI tweak are two pull requests.
-* **Say how you checked it.** Not a test suite — just the problem URL you tried it on and what you saw.
+Pull requests are welcome. Two things make them easy to merge. Keep one change per pull
+request, so that a statement-parser fix and a UI tweak arrive separately. And say how you
+checked it: there is no test suite to run, so the problem URL you tried and what you saw
+is enough.
 
 If you are adding a judge, `src/judges/drivers.cpp` is the place; each site is one
 `SiteDriver` describing its login check, submit form and verdict page.
 
 ## Known issues
 
-* **Nothing is code-signed.** Windows SmartScreen says "Windows protected your PC" and shows the publisher as Unknown; macOS Gatekeeper refuses the first launch. Both are one extra click. Certificates cost a few hundred dollars a year each, and a plain Windows one still warns until the file builds download reputation.
-* **The macOS build is Apple Silicon only.** An Intel build would need a second CI job.
-* **Linux and macOS get far less testing than Windows.** They are built and packaged on every release, but Windows is what gets used daily. Reports from the other two are especially welcome.
-* **The C++ debugger needs gdb**, which macOS does not ship. The Python debugger works everywhere.
-* **USACO verdict parsing is best effort**, and USACO shows no submit form at all once a contest closes — the app now tells you which of those happened rather than failing silently.
-* **CodeChef and HackerRank import but do not auto-submit.** Statements, limits and samples come in fine; Submit copies your code to the clipboard and opens the site's submit page, because both render their submit forms in JavaScript that changes often enough not to be worth pinning to.
-* **Codeforces sits behind an anti-bot check.** Statement fetching falls back to the `curl.exe` that ships with Windows, which gets through. The browser fallback always works if auto-submit is blocked.
+* Nothing is code-signed. Windows SmartScreen says "Windows protected your PC" and shows the publisher as Unknown; macOS Gatekeeper refuses the first launch. Both are one extra click. Certificates cost a few hundred dollars a year each, and a plain Windows one still warns until the file builds download reputation.
+* The macOS build is Apple Silicon only. An Intel build would need a second CI job.
+* Linux and macOS get far less testing than Windows. They are built and packaged on every release, but Windows is what gets used daily. Reports from the other two are especially welcome.
+* The C++ debugger needs gdb, which macOS does not ship. The Python debugger works everywhere.
+* USACO verdict parsing is best effort, and USACO shows no submit form at all once a contest closes. The app says which of those happened rather than failing silently.
+* CodeChef and HackerRank import but do not auto-submit. Statements, limits and samples come in fine; Submit copies your code to the clipboard and opens the site's submit page, because both render their submit forms in JavaScript that changes too often to pin down.
+* Codeforces sits behind an anti-bot check. Statement fetching falls back to the `curl.exe` that ships with Windows, which gets through. The browser fallback always works if auto-submit is blocked.
 
 ## Like this project?
 
 It is MIT licensed and free, and it will stay that way. If it saved you time in a contest,
-starring the repo is genuinely the most useful thing you can do — it is how other people
-doing contests find it.
+starring the repo helps more than anything else, since that is how other people doing
+contests find it.
 
-Better still, open an issue when something annoys you. Most of what this app does well
-started as somebody saying "why does it do *that*".
+Opening an issue when something annoys you helps even more. Most of what this app does
+well started with somebody asking "why does it do *that*".
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE). Monaco, webview, KaTeX and nlohmann/json keep their own
+MIT; see [`LICENSE`](LICENSE). Monaco, webview, KaTeX and nlohmann/json keep their own
 licenses in `third_party/`.
