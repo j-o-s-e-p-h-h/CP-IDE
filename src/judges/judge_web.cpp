@@ -78,13 +78,15 @@ void JudgeWeb::show(bool visible) {
 // Cocoa through the Objective-C runtime (no Objective-C++ needed). Instead of intercepting
 // the close button, the window simply has none: it is shown and hidden by the app.
 namespace {
-using id_t = id;
-template <typename R = void, typename... A> R msg(id_t obj, const char* sel, A... a) {
-  return ((R (*)(id_t, SEL, A...))objc_msgSend)(obj, sel_registerName(sel), a...);
+// Not id_t: <sys/_types/_id_t.h> already defines that in the global namespace,
+// and an unqualified use in here is then ambiguous.
+using objc_id = id;
+template <typename R = void, typename... A> R msg(objc_id obj, const char* sel, A... a) {
+  return ((R (*)(objc_id, SEL, A...))objc_msgSend)(obj, sel_registerName(sel), a...);
 }
 }  // namespace
 void JudgeWeb::installCloseHook() {
-  auto win = (id_t)hwnd_;
+  auto win = (objc_id)hwnd_;
   unsigned long mask = msg<unsigned long>(win, "styleMask");
   msg<void, unsigned long>(win, "setStyleMask:", mask & ~(unsigned long)2 /* NSWindowStyleMaskClosable */);
   msg<void, BOOL>(win, "setReleasedWhenClosed:", NO);
@@ -92,9 +94,9 @@ void JudgeWeb::installCloseHook() {
 void JudgeWeb::removeCloseHook() {}
 void JudgeWeb::show(bool visible) {
   if (!hwnd_) return;
-  auto win = (id_t)hwnd_;
-  if (visible) msg<void, id_t>(win, "makeKeyAndOrderFront:", nullptr);
-  else msg<void, id_t>(win, "orderOut:", nullptr);
+  auto win = (objc_id)hwnd_;
+  if (visible) msg<void, objc_id>(win, "makeKeyAndOrderFront:", nullptr);
+  else msg<void, objc_id>(win, "orderOut:", nullptr);
 }
 
 #else
