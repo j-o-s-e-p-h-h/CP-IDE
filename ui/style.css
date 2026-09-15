@@ -60,6 +60,11 @@ button:focus-visible, textarea:focus-visible, select:focus-visible, input:focus-
 .contest-btn .caret { font-size: 10px; }
 .menu { position: absolute; top: 36px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-md); z-index: 70; animation: slidein .15s ease; }
 .contest-menu { left: 0; width: 320px; overflow: hidden; }
+/* The saved-contest list is the one menu that grows without bound. Left alone it
+   runs off the bottom of the window — nothing scrolls it, and the footer with the
+   Home and Setup links goes with it — so only the rows scroll and the header and
+   footer stay put. */
+.contest-menu .clist { max-height: min(62vh, 400px); overflow-y: auto; overscroll-behavior: contain; }
 .contest-menu .head { display: flex; align-items: center; padding: 8px 14px; border-bottom: 1px solid var(--border); }
 .contest-menu .head .lbl { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 .btn-outline-accent { padding: 4px 10px; border-radius: var(--radius-md); border: 1px solid var(--accent); background: transparent; color: var(--accent); font-size: 12px; font-weight: 600; }
@@ -71,6 +76,8 @@ button:focus-visible, textarea:focus-visible, select:focus-visible, input:focus-
 .xbtn { border: none; background: transparent; color: var(--muted); font-size: 13px; padding: 2px 4px; }
 .xbtn:hover { color: var(--bad); }
 .xbtn.lg { font-size: 15px; } .xbtn.lg:hover { color: var(--text); }
+.contest-menu .more { display: block; width: 100%; padding: 9px 14px; border: none; border-top: 1px solid var(--border); background: transparent; color: var(--accent); font-size: 12.5px; font-weight: 600; text-align: left; }
+.contest-menu .more:hover { background: var(--codebg); }
 .contest-menu .foot { padding: 9px 14px; font-size: 11.5px; color: var(--muted); }
 /* Tabs must never push the Run / Submit / timer controls off the right edge of
    the bar: the strip itself scrolls once a contest has more problems than fit. */
@@ -395,6 +402,8 @@ button:focus-visible, textarea:focus-visible, select:focus-visible, input:focus-
 .resume .mt { font-size: 12.5px; color: var(--muted); margin-top: 3px; font-variant-numeric: tabular-nums; }
 .hrow2 { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--panel); cursor: pointer; margin-bottom: 8px; }
 .hrow2:hover { border-color: var(--muted); }
+.home-more { display: block; margin-top: 2px; padding: 8px 0; border: none; background: transparent; color: var(--accent); font-size: 13px; font-weight: 600; text-align: left; }
+.home-more:hover { text-decoration: underline; }
 .hrow2.arming { border-color: var(--bad); background: color-mix(in srgb, var(--bad) 10%, transparent); }
 .hrow2 .nm { font-size: 13.5px; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hrow2 .mt { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }

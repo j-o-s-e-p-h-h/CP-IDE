@@ -25,6 +25,7 @@ const S = {
   historyOpen: false, contestMenuOpen: false, layoutMenuOpen: false, timerMenuOpen: false, importOpen: false,
   timerEdit: '', importUrl: '', confirmDelete: '', shortcutsOpen: false,
   tplOpen: false, tplLang: 'cpp', tplText: '', tplDirty: false, homeOpen: false, ctx: null,
+  allContests: false,   // "Show N older" was clicked: list every saved contest, not just the recent ones
   paneW: 0, testsH: 0, rightW: 0, rightTop: 0,
   testsCollapsed: true, probTab: 'desc', tcTab: 'case', selCase: 0, curLn: 1, curCol: 1,
   sessionOpen: false, sessionName: '', sessionMode: 'blank', ratingMin: '1200', ratingMax: '1500', sessionUrl: '', sessionBusy: false,
@@ -739,7 +740,12 @@ function saveTemplateIfDirty(announce) {
 // --------------------------------------------------------------- templates
 const ICON_PLAY = '<svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4l14 8-14 8z"></path></svg>';
 const ICON_CLOCK = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="13" r="8"></circle><path d="M12 9v4l2.5 2.5M9 2h6"></path></svg>';
-const ICON_LAYOUT = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"></rect><path d="M9 3v18M15 9h6M15 15h6"></path></svg>';
+// How many saved contests each list shows before the rest are folded behind
+// "Show N older" — enough that the usual few are always there, few enough that
+// the dropdown stays a menu rather than a scrolling wall.
+const MENU_CONTESTS = 7;   // 7 rows x 56px matches the .clist cap, so the short list never scrolls
+const HOME_CONTESTS = 5;
+const ICON_LAYOUT ='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"></rect><path d="M9 3v18M15 9h6M15 15h6"></path></svg>';
 const ICON_STOP = '<svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2"></rect></svg>';
 
 const LANGS = [['python', 'Python 3'], ['cpp', 'C++ (g++ 15)'], ['java', 'Java'], ['js', 'JavaScript (Node)']];
@@ -844,9 +850,18 @@ function topbarHtml() {
   }
   const contestName = S.session ? S.session.name : 'No session';
   const tabs = problems().map((pr) => `<button class="tab${pr.id === S.active ? ' active' : ''}" data-act="tab" data-arg="${esc(pr.id)}" title="${esc(pr.id)}. ${esc(pr.title)}">${esc(pr.id)}${pr.solved || pr.attempted ? `<span class="dot" style="background:${pr.solved ? 'var(--ok)' : 'var(--bad)'}"></span>` : ''}<span class="tabx" data-act="delProblem" data-arg="${esc(pr.id)}" title="Remove this problem from the session">✕</span></button>`).join('');
+  // Only the most recent handful are listed; the rest are one click away rather
+  // than a long scroll. An armed delete always stays on screen, or confirming it
+  // would mean hunting for a row that just moved.
+  const shownContests = S.allContests ? S.contests : S.contests.slice(0, MENU_CONTESTS);
+  if (S.confirmDelete && !shownContests.some((c) => c.dir === S.confirmDelete)) {
+    const armed = S.contests.find((c) => c.dir === S.confirmDelete);
+    if (armed) shownContests.push(armed);
+  }
+  const hiddenContests = S.contests.length - shownContests.length;
   // Deleting a contest removes the folder and every solution in it, so it takes two
   // clicks: the ✕ arms the row, "Delete" confirms.
-  const contests = S.contests.map((c) => `<div class="contest-row${S.confirmDelete === c.dir ? ' arming' : ''}" data-act="openContest" data-arg="${esc(c.dir)}">
+  const contests = shownContests.map((c) => `<div class="contest-row${S.confirmDelete === c.dir ? ' arming' : ''}" data-act="openContest" data-arg="${esc(c.dir)}">
       <div style="flex:1;min-width:0"><div class="name" style="font-weight:${c.active ? 600 : 400}">${esc(c.name)}</div><div class="meta">${esc(c.date)} · ${esc(c.meta)}</div></div>
       ${S.confirmDelete === c.dir
         ? `<span class="warn">Delete the folder?</span><button class="btn-sm danger fit" data-act="deleteContest" data-arg="${esc(c.dir)}" data-name="${esc(c.name)}">Delete</button><button class="btn-sm fit" data-act="cancelDelete">Keep</button>`
@@ -859,7 +874,11 @@ function topbarHtml() {
       <button class="contest-btn" data-act="contestMenu">${esc(contestName)} <span class="caret">▾</span></button>
       ${S.contestMenuOpen ? `<div class="menu contest-menu" data-stop="1">
         <div class="head"><div class="lbl">Saved contests</div><div class="grow"></div><button class="btn-outline-accent" data-act="newSession">+ New session</button></div>
-        ${contests || '<div class="empty" style="padding:12px 14px">No saved contests yet.</div>'}
+        <div class="clist">${contests || '<div class="empty" style="padding:12px 14px">No saved contests yet.</div>'}</div>
+        ${hiddenContests > 0
+          ? `<button class="more" data-act="showAllContests">Show ${hiddenContests} older contest${hiddenContests === 1 ? '' : 's'}…</button>`
+          : S.allContests && S.contests.length > MENU_CONTESTS
+            ? '<button class="more" data-act="showFewerContests">Show fewer</button>' : ''}
         <div class="foot" title="${esc(S.root)}\\contests">Stored on disk in cp/contests/ — deleting removes the folder. <a href="#" data-act="home">Home</a> · <a href="#" data-act="setupOpen">Setup…</a></div>
       </div>` : ''}
     </div>
@@ -1208,7 +1227,9 @@ function homeHtml() {
   const cur = S.session;
   const open = cur ? S.contests.find((c) => c.dir === cur.dir) : null;
   const solved = cur ? cur.problems.filter((p) => p.solved).length : 0;
-  const recents = S.contests.filter((c) => !cur || c.dir !== cur.dir).slice(0, 5);
+  const others = S.contests.filter((c) => !cur || c.dir !== cur.dir);
+  const recents = S.allContests ? others : others.slice(0, HOME_CONTESTS);
+  const hiddenRecents = others.length - recents.length;
   // Only what is actually available is listed; a language you do not use is not a
   // problem to be flagged here — Run says so if and when you try to use it.
   const found = S.tools.filter((t) => t.id !== 'gdb' && t.found);
@@ -1230,7 +1251,11 @@ function homeHtml() {
         ${S.confirmDelete === c.dir
           ? `<span class="warn">Delete the folder?</span><button class="btn-sm danger fit" data-act="deleteContest" data-arg="${esc(c.dir)}" data-name="${esc(c.name)}">Delete</button><button class="btn-sm fit" data-act="cancelDelete">Keep</button>`
           : `<span class="mt">${esc(c.date)} · ${esc(c.meta)}</span><button class="xbtn" data-act="askDelete" data-arg="${esc(c.dir)}" title="Delete this contest folder">✕</button>`}
-      </div>`).join('')}</div>` : ''}
+      </div>`).join('')}
+      ${hiddenRecents > 0
+        ? `<button class="home-more" data-act="showAllContests">Show ${hiddenRecents} older contest${hiddenRecents === 1 ? '' : 's'}…</button>`
+        : S.allContests && others.length > HOME_CONTESTS
+          ? '<button class="home-more" data-act="showFewerContests">Show fewer</button>' : ''}</div>` : ''}
 
     <div class="home-sec"><div class="sh">Start</div>
       <div class="home-start">
@@ -1618,6 +1643,8 @@ document.addEventListener('click', (e) => {
     case 'homeClose': S.homeOpen = false; render(); break;
     case 'shortcuts': closeMenus(); S.shortcutsOpen = true; render(); break;
     case 'shortcutsClose': S.shortcutsOpen = false; render(); break;
+    case 'showAllContests': e.preventDefault(); S.allContests = true; render(); break;
+    case 'showFewerContests': e.preventDefault(); S.allContests = false; render(); break;
     case 'tplOpen': e.preventDefault(); closeMenus(); openTemplates(S.tplLang); break;
     case 'tplClose': saveTemplateIfDirty(); S.tplOpen = false; render(); break;
     case 'tplLang': saveTemplateIfDirty(); openTemplates(arg); break;
