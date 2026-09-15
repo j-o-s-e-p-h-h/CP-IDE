@@ -1,229 +1,141 @@
 # CP IDE
 
-A desktop IDE for competitive programming on Windows. A problem arrives from the
-[Competitive Companion](https://github.com/jmerle/competitive-companion) browser
-extension, folders and files are created for it, you solve it in Python or C++
-with a Monaco editor, run all sample tests with one click, submit to the judge,
-and keep a verdict history. Everything is free, nothing is paywalled.
+## A free desktop IDE for competitive programming — import a problem, solve it, run every sample, submit to the judge, without leaving the window.
 
-- **C++ core** with a native window through [webview/webview](https://github.com/webview/webview) (WebView2 on Windows).
-- **Monaco** editor with VS Code Dark+/Light+ colours and rainbow bracket pairs.
-- Four layouts: Default, Note-taking, Debug, Focus Mode. Dark by default, light toggle.
-- Per-problem timer (stopwatch / countdown, presets, pause, reset), notes, breakpoints, tests.
-- Local runs for Python, C++ (`g++ -O2 -std=c++23`), Java (`javac` + `java`) and JavaScript (`node`) with PASS / FAIL / TLE / RE verdicts.
-- Stress testing with `gen.py` + `brute.py`, a real debugger (Python through `bdb`, C++ through gdb/MI).
-- Judge submission behind one interface: Codeforces implemented (login + submit + verdict polling),
-  AtCoder / CSES / USACO / HackerRank fall back to a browser submit with the code on the clipboard.
-- New sessions: blank, three random unsolved Codeforces problems by rating, or from a URL. Left unnamed, a session is called `Session — Sep 13` (the date) or `Random 1200–1500` (the band).
+CP IDE is a C++ desktop app for people who do timed programming contests. A problem
+arrives from the [Competitive Companion](https://github.com/jmerle/competitive-companion)
+browser extension or a pasted URL, and the app does the boring part: it creates the
+folders, writes the sample tests to disk, renders the statement next to your editor, and
+gives you one key to compile and run everything. It covers:
 
-## Starting up
+* Importing a single problem or a whole contest from Codeforces, AtCoder, CSES, USACO and HackerRank
+* Rendering the real statement — images, tables and LaTeX — beside the code, not in a browser tab
+* Running every sample in Python, C++, Java or JavaScript with `PASS` / `WA` / `TLE` / `RE` per case
+* Saying *why* a run failed — the exception, the first differing token, what the exit code means
+* Submitting to Codeforces, AtCoder, CSES and USACO from inside the app, with the verdict polled back
+* Stress testing against a brute force, and a real step debugger for Python and C++
+* Keeping a per-problem timer, notes and a verdict history across every contest you have opened
 
-A splash covers the window while Monaco loads, then every launch lands on the **home screen**:
-resume the session you were in, reopen a recent contest, start a session, paste a problem URL,
-and see whether Competitive Companion is being listened for and which compilers were found.
-`Esc` (or Resume) goes on to the editor; the logo in the top bar and contest menu → Home bring
-it back.
+Nothing is paywalled, there is no account, and your solutions are plain files in a folder
+you can open with anything else.
 
-## Install (users)
+![CP IDE running a Codeforces problem](docs/screenshot.png)
 
-Download `CP-IDE-Setup-<version>.exe` from the Releases page and run it. It installs CP IDE
-(about 8 MB), adds Start Menu / desktop shortcuts, and fetches the Microsoft Edge WebView2
-runtime if the machine does not have it (Windows 11 always does). On first start the app opens
-a setup page that checks for Python, g++, Java and Node, offers one-click installs for what is
-missing, and lets you log in to the judges.
+<p align="center"><em>A Codeforces problem: statement on the left, editor on the right, all five samples green.</em></p>
 
-## Build from source
+## Install it
 
-Requirements on the build machine:
+**Windows** — download `CP-IDE-Setup-0.1.0.exe` from the Releases page and run it. It is
+about 8 MB, adds Start Menu and desktop shortcuts, and pulls the Microsoft Edge WebView2
+runtime if the machine lacks it (Windows 11 already has it).
 
-- Windows 10/11 with the Microsoft Edge WebView2 runtime (preinstalled on Windows 11).
-- MSYS2 UCRT64 toolchain: `pacman -S mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja mingw-w64-ucrt-x86_64-gdb`
-  (g++ 15.x at `C:\msys64\ucrt64\bin`).
-- Python 3 on `PATH` (used to run Python solutions, generators and the debugger helper).
+On first launch the app checks for Python, g++, Java and Node, and offers a one-click
+install for whatever is missing. You do not need all four — only the languages you use.
+
+Then:
+
+1. Install [Competitive Companion](https://github.com/jmerle/competitive-companion) in your browser
+2. Check that port **10045** is in its port list (it is, by default)
+3. Open a problem or contest page and click the green **+**
+
+It shows up as a tab, with its samples already in place. No Companion? Paste the URL into
+the box on the home screen instead — a problem URL imports one problem, a contest URL
+imports the whole round.
+
+![The launcher](docs/home.png)
+
+Press `F1` at any time for the keyboard shortcuts. The ones worth learning first are
+`Ctrl+Enter` to run every sample and `Ctrl+Shift+Enter` to submit.
+
+## Build it yourself
+
+All dependencies are vendored in `third_party/` — webview, the WebView2 SDK, nlohmann/json,
+Monaco and KaTeX — so the build needs no network access.
+
+**Windows**, with the [MSYS2](https://www.msys2.org/) UCRT64 toolchain:
 
 ```powershell
-git clone <this repo> cp-ide
-cd cp-ide
+pacman -S mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja
 $env:PATH = "C:\msys64\ucrt64\bin;$env:PATH"
 cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 .\build\bin\cp-ide.exe
 ```
 
-All third-party code is vendored in `third_party/` (webview, WebView2 SDK headers + loader DLL,
-nlohmann/json, a trimmed Monaco build, KaTeX), so no network access is needed to build.
-
-To build the installer, install [Inno Setup 6](https://jrsoftware.org/isinfo.php)
-(`winget install JRSoftware.InnoSetup`), re-run `cmake -B build`, then:
-
-```powershell
-cmake --build build --target installer     # -> installer\out\CP-IDE-Setup-0.1.0.exe
-```
-
-Codeforces sits behind an anti-bot check that rejects plain HTTP clients; statement fetching
-falls back to the `curl.exe` that ships with Windows, which gets through. Auto-submit uses the
-same in-process client and may be blocked too; the browser fallback always works.
-
-Then install Competitive Companion in your browser and make sure port **10045** is in its
-port list (it is by default). Click the green plus on a problem or contest page and it shows
-up as a tab.
-
-### Linux
+**Linux:**
 
 ```sh
-sudo apt install g++ cmake ninja-build libwebkit2gtk-4.1-dev   # Debian/Ubuntu; Fedora: webkit2gtk4.1-devel
+sudo apt install g++ cmake ninja-build libwebkit2gtk-4.1-dev   # Fedora: webkit2gtk4.1-devel
 cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build
-./build/bin/cp-ide                      # or: sudo cmake --install build   (adds a menu entry)
+cmake --build build && ./build/bin/cp-ide
 ```
 
-Clipboard for the browser fallback uses `wl-copy`, `xclip` or `xsel`, whichever is installed.
-The judge windows use your WebKitGTK session, so logins persist like in a browser.
-
-### macOS
+**macOS:**
 
 ```sh
-xcode-select --install                  # clang++
-brew install cmake ninja
+xcode-select --install && brew install cmake ninja
 cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build                     # -> build/bin/cp-ide.app
+cmake --build build                      # -> build/bin/cp-ide.app
 ```
 
-The C++ debugger needs gdb, which macOS does not have (lldb is not supported yet); the Python
-debugger works. Linux and macOS builds are compiled from the same sources but have had far less
-testing than Windows: please report what breaks.
-
-## Where things live on disk
-
-Default data root is `%USERPROFILE%\cp` (override with the `CP_IDE_HOME` environment variable).
+### How it fits together
 
 ```
-cp/
-  config.json                 tool paths + Codeforces credentials
-  state.json                  last contest, layout, theme, pane sizes
-  templates/main.cpp ...      your boilerplate, copied into every new problem
-  history.json                every submission verdict
-  contests/<contest>/contest.json
-  contests/<contest>/<problem>/
-      main.py  main.cpp  Main.java  main.js   your solutions (start empty)
-      gen.py   brute.py       stress-test generator and reference
-      tests/1.in 1.out ...    sample tests, custom1.in/.out for your own
-      problem.json            name, URL, limits, fetched statement HTML
-      state.json              timer, verdict flags, notes, breakpoints
-```
-
-Contests are listed, reopened and deleted (folder removed) from the contest menu in the top bar.
-
-### Joining a live or virtual contest
-
-Two ways, both of which create one contest folder with every problem in it:
-
-- **Paste the contest URL** into the `+` box in the top bar or the box on the home screen —
-  `https://codeforces.com/contest/2009` or `https://atcoder.jp/contests/abc319`. Every problem
-  is imported with its statement, limits and sample tests. Works for a round that is running,
-  upcoming or long finished, and for virtual participation.
-- **Competitive Companion**: open the contest page in your browser and click the green **+**
-  there; it sends the whole batch at once.
-
-When Codeforces publishes a countdown for the round (live or virtual), the remaining time
-appears next to the contest name in the top bar and turns red in the last 15 minutes.
-
-### Where does an imported problem go?
-
-- A whole-contest click (Companion batch) goes into a contest folder named after the contest.
-- A single problem goes into the currently open session; if a contest is open instead,
-  it goes into the contest folder for that problem's contest (created if needed).
-
-## Submitting
-
-**Codeforces submits from inside the app.** The first time you press Submit, a "Codeforces" window
-opens inside CP IDE: log in there once (it is a real browser session, so Cloudflare checks and
-captchas work). After that, Submit navigates that window to the problem's submit page, fills the
-form with your code and compiler, waits for Cloudflare's Turnstile check to pass (it needs the
-window on screen, so the window shows for a few seconds), presses Submit, and polls
-`api/user.status` until the verdict arrives. The verdict lands in History and on the tab. If
-Codeforces wants something from you (login, an interactive check, "same code submitted before"),
-the window stays open with a message and you finish the step there. Open it any time from the
-Submissions tab ("Codeforces account…") to log in or out.
-
-Compiler ids are in `cp/config.json` (`pythonProgramTypeId` 31, `cppProgramTypeId` 91,
-`javaProgramTypeId` 87, `jsProgramTypeId` 55; 70 = PyPy 3.10, 89 = C++20).
-
-**AtCoder, CSES and USACO** work the same way, each in its own in-app window: log in once, then
-Submit fills the site's form (AtCoder: task + language ids from `cp/config.json`, `atcoder.*LangId`;
-CSES and USACO: language picked by name, code attached as the file the form wants) and reads the
-verdict from the site's status page. USACO's result parsing is best effort. **HackerRank** uses the
-browser fallback: Submit copies your code to the clipboard and opens the problem page.
-
-`programTypeId` values are Codeforces compiler ids (31 = Python 3, 91 = C++23 GCC 14, 87 = Java 21, 55 = Node.js; 70 = PyPy 3.10, 89 = C++20).
-
-## Compilers and interpreters
-
-The setup page (contest menu → Setup) shows what was found and lets you change it:
-
-- **C++**: every g++ and clang++ on the machine is listed; pick one or enter any path.
-  The compile line is `<compiler> <flags> main.cpp -o sol.exe` with the flags editable
-  (default `-O2 -std=c++23`). MSVC (`cl.exe`) is not supported: it needs its own environment.
-- **Python, Java, Node**: auto-detected from PATH and the usual install folders; "Path…" pins a
-  specific executable.
-
-The same values live in `cp/config.json` (`python`, `cppCompiler`, `cppFlags`, `javac`, `java`, `node`).
-An empty value means auto-detect.
-
-## Shortcuts
-
-Press `F1` in the app (or the `?` button in the top bar) for this list.
-
-| Key | Does |
-| --- | --- |
-| `Ctrl+Enter` | Run all tests |
-| `Ctrl+Shift+Enter` | Submit |
-| `Ctrl+.` | Stop the run |
-| `Alt+←` / `Alt+→` | Previous / next problem |
-| `Alt+1` … `Alt+9` | Jump to a problem |
-| `Ctrl+Alt+C` | Copy the whole solution |
-| `Ctrl+Shift+T` | Add a test case |
-| `Ctrl+B` | Show / hide the test panel |
-| `Ctrl+ +` / `Ctrl+ -` / `Ctrl+0` | Editor font size |
-| `Ctrl+Shift+F` | Focus Mode |
-| `Esc` | Leave Focus Mode / close menus |
-
-Click a line number to toggle a breakpoint (used by Debug ▶ in the Debug layout). `F5` and
-`Ctrl+R` are deliberately inert: a reload mid-contest would throw away the editor's undo history.
-
-## Test cases
-
-Codeforces packs its whole sample into one block of `t` test cases, but tags every line with
-the case it belongs to — so the import splits it into one test per case, each with its own
-expected output and `1` as its count line. A verdict then names the case that failed instead of
-pointing at a wall of text. Problems with a single case, and judges that do not tag their
-samples, are left as they are. Refreshing a statement re-reads the samples; cases you added
-yourself are kept.
-
-Each case has a ▶ that runs only that one, a ⧉ that copies its input, and its wall-clock time
-next to the verdict. A failing case shows the first line and token where your output and the
-expected answer part ways. Leaving **Expected** empty is allowed: the case then reports `OUT`
-with whatever your program printed, and ✓ turns that output into the expected answer.
-
-Both the statement/editor split and the height of the test panel are draggable, and
-double-clicking a divider puts it back to the layout default.
-
-## Code templates
-
-New problems start from `cp/templates/` (`main.cpp`, `main.py`, `Main.java`, `main.js`), which
-is empty until you put something there. Contest menu → Setup → **Code templates** edits them,
-with a starter for each language one click away. Existing problems are untouched; `↺` above the
-editor pulls the template into the file you are looking at.
-
-## Repository layout
-
-```
-src/            C++ core: window + RPC bridge, HTTP server, storage, runner, judges, stress, debugger
-ui/             the web UI (index.html, style.css, app.js) served from 127.0.0.1:10045
-tools/          cp_debug.py (Python debugger helper), make_icon.py (rebuilds src/res/cp-ide.ico from the logo)
+src/            C++ core: window, RPC bridge, HTTP server, storage, runner, judges, stress, debugger
+src/judges/     one driver per site; adding a judge means adding a SiteDriver, not a new app
+ui/             the front end (index.html, style.css, app.js), served from 127.0.0.1:10045
+tools/          cp_debug.py (Python debugger helper), make_icon.py (rebuilds the app icon)
 third_party/    vendored dependencies
 ```
 
+The core is C++ and owns everything that touches disk, processes and judges. The UI is a
+web front end in a native window, talking to the core over a local RPC bridge. If you want
+to change how something *looks*, you want `ui/`. How it *behaves*, `src/`.
+
+Your data lives in `%USERPROFILE%\cp` (`~/cp` elsewhere; override with `CP_IDE_HOME`):
+
+```
+cp/contests/<contest>/<problem>/
+    main.cpp  main.py  Main.java  main.js   your solutions
+    gen.py    brute.py                      stress-test generator and reference
+    tests/1.in 1.out ...                    samples, plus any case you add
+    problem.json                            title, URL, limits, fetched statement
+```
+
+Plain files, plain JSON. Delete a folder and that problem is gone; there is no database.
+
+## Found a bug?
+
+Please open an issue using the Issues tab above. The useful ones say which judge and
+problem URL it happened on, since most rough edges are one site's markup rather than the
+app itself.
+
+Pull requests are welcome. Two things make them easy to merge:
+
+* **One change per PR.** A statement-parser fix and a UI tweak are two pull requests.
+* **Say how you checked it.** Not a test suite — just the problem URL you tried it on and what you saw.
+
+If you are adding a judge, `src/judges/drivers.cpp` is the place; each site is one
+`SiteDriver` describing its login check, submit form and verdict page.
+
+## Known issues
+
+* **Linux and macOS get far less testing than Windows.** They build from the same sources and work, but Windows is what gets used daily. Reports from the other two are especially welcome.
+* **The C++ debugger needs gdb**, which macOS does not ship. The Python debugger works everywhere.
+* **USACO verdict parsing is best effort**, and USACO shows no submit form at all once a contest closes — the app now tells you which of those happened rather than failing silently.
+* **HackerRank has no in-app submit.** Submit copies your code and opens the problem page.
+* **Codeforces sits behind an anti-bot check.** Statement fetching falls back to the `curl.exe` that ships with Windows, which gets through. The browser fallback always works if auto-submit is blocked.
+
+## Like this project?
+
+It is MIT licensed and free, and it will stay that way. If it saved you time in a contest,
+starring the repo is genuinely the most useful thing you can do — it is how other people
+doing contests find it.
+
+Better still, open an issue when something annoys you. Most of what this app does well
+started as somebody saying "why does it do *that*".
+
 ## License
 
-MIT, see `LICENSE`. Monaco, webview and nlohmann/json keep their own licenses in `third_party/`.
+MIT — see [`LICENSE`](LICENSE). Monaco, webview, KaTeX and nlohmann/json keep their own
+licenses in `third_party/`.
